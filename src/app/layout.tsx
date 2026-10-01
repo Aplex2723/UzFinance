@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk } from "next/font/google";
+// Tipografías autoalojadas (sin descargas de Google en el build ni en el navegador).
+import "@fontsource-variable/inter";
+import "@fontsource-variable/space-grotesk";
 import "./globals.css";
-
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
-const grotesk = Space_Grotesk({ variable: "--font-grotesk", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
   title: "UzFinance",
@@ -15,7 +14,7 @@ export const viewport: Viewport = { themeColor: "#060606", colorScheme: "dark", 
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="es-MX" className={`${inter.variable} ${grotesk.variable}`}>
+    <html lang="es-MX">
       <body className="relative">
         <div className="relative z-10">{children}</div>
       </body>

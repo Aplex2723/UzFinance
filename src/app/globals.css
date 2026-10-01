@@ -12,8 +12,8 @@
   --color-accent-2: #ff6a3d;
   --color-up: #22c55e;
   --color-down: #ef4444;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --radius-card: 18px;
 }
 
