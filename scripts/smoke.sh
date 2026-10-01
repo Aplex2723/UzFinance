@@ -19,8 +19,12 @@ done
 c=$(code -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer invalido-invalido-invalido-invalido-1234' -d '{}' "$BASE/api/ingest")
 [ "$c" = "401" ] && ok "token inválido → 401" || bad "token inválido → $c"
 
-read -r c loc < <(curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' --max-time 90 "$BASE/")
-if [ "$c" = "302" ] && [[ "$loc" == *"/.auth/login/aad"* || "$loc" == *"login.microsoftonline.com"* ]]; then ok "GET / sin sesión → 302 al login de Entra"; else bad "GET / sin sesión → $c $loc"; fi
+# Easy Auth: un navegador sin sesión recibe 302 al login de Entra; un cliente que no lo parece, 401.
+read -r c loc < <(curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' --max-time 90 -H 'Accept: text/html,application/xhtml+xml' -H 'User-Agent: Mozilla/5.0 (smoke-test)' "$BASE/")
+if [ "$c" = "302" ] && [[ "$loc" == *"login.microsoftonline.com"* ]]; then ok "GET / sin sesión (navegador) → 302 al login de Entra"; else bad "GET / sin sesión (navegador) → $c ${loc:0:80}"; fi
+
+hdr=$(curl -s -D - -o /dev/null --max-time 90 "$BASE/")
+if echo "$hdr" | head -1 | grep -q " 401" && echo "$hdr" | grep -qi '^www-authenticate: Bearer'; then ok "GET / sin sesión (cliente no navegador) → 401 de Easy Auth"; else bad "GET / sin sesión (cliente no navegador) no fue 401 de Easy Auth"; fi
 
 c=$(code "$BASE/api/transactions")
 [ "$c" = "302" ] || [ "$c" = "401" ] && ok "GET /api/transactions sin sesión → $c" || bad "GET /api/transactions sin sesión → $c (¡expuesto!)"
