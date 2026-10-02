@@ -33,7 +33,7 @@ function CardForm({ card, onDone }: { card: Card | null; onDone: () => void }) {
       <div className="grid grid-cols-2 gap-3">
         <div><label className="label" htmlFor="c-issuer">Emisor</label>
           <select id="c-issuer" name="issuer" defaultValue={card?.issuer ?? "banamex"} className="field" onChange={(e) => { if (!card) { const c = e.currentTarget.form?.elements.namedItem("color") as HTMLInputElement | null; if (c) c.value = ISSUER_COLOR[e.currentTarget.value as keyof typeof ISSUER_COLOR] ?? c.value; } }}>{(["amex", "banamex", "nu", "other"] as const).map((i) => <option key={i} value={i}>{ISSUER_LABEL[i]}</option>)}</select></div>
-        <div><label className="label" htmlFor="c-last4">Últimos 4</label><input id="c-last4" name="last4" pattern="\d{4}" inputMode="numeric" maxLength={4} defaultValue={card?.last4 ?? ""} className="field" /></div>
+        <div><label className="label" htmlFor="c-last4">Últimos dígitos</label><input id="c-last4" name="last4" pattern="\d{3,4}" inputMode="numeric" maxLength={4} defaultValue={card?.last4 ?? ""} className="field" /></div>
       </div>
       <div><label className="label" htmlFor="c-alias">Alias (separados por coma, como los manda Wallet)</label><input id="c-alias" name="aliases" maxLength={300} defaultValue={card?.aliases ?? ""} className="field" placeholder="Ej. Nu, Nu Bank, NuBank" /></div>
       <div className="grid grid-cols-2 items-end gap-3">
@@ -67,8 +67,9 @@ export function CardsManager({ cards }: { cards: Card[] }) {
       {error && <p role="alert" className="mb-2 text-down">{error}</p>}
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((c) => (
-          <li key={c.id} className={`glass p-4 ${c.active ? "" : "opacity-50"}`}>
+          <li key={c.id} className={`glass p-4 ${c.active ? "" : "opacity-50"} ${c.needs_name ? "border border-[#f59e0b]/60" : ""}`} data-testid={c.needs_name ? "card-unnamed" : undefined}>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ background: c.color }} aria-hidden /><b className="truncate">{c.name}</b>{!c.active && <span className="text-[10px] text-faint">inactiva</span>}</div>
+            {c.needs_name && <p className="mt-1 text-[11px] text-[#f59e0b]">Sin nombrar: llegó por correo del banco. Edítala para ponerle nombre y alias de Wallet.</p>}
             <p className="mt-1 text-muted">{ISSUER_LABEL[c.issuer]}{c.last4 ? ` · •••• ${c.last4}` : ""}</p>
             {c.aliases && <p className="mt-1 truncate text-[11px] text-faint">Alias: {c.aliases}</p>}
             <div className="mt-3 flex gap-2">

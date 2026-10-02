@@ -3,7 +3,7 @@ import { parseAmountToCents } from "@/lib/money";
 import { MONTH_RE } from "@/lib/time";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/, "color hex #RRGGBB");
-const last4 = z.string().regex(/^\d{4}$/).nullable().optional().transform((v) => v ?? null);
+const last4 = z.string().regex(/^\d{3,4}$/).nullable().optional().transform((v) => v ?? null);
 const optText = (max: number) =>
   z.string().trim().max(max).nullable().optional().transform((v) => (v ? v : null));
 
@@ -54,6 +54,7 @@ export const listQuery = z.object({
   card: z.coerce.number().int().positive().optional(),
   category: z.union([z.literal("none"), z.coerce.number().int().positive()]).optional(),
   month: z.string().regex(MONTH_RE).optional(),
+  kind: z.enum(["expense", "card_payment", "all"]).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
 });

@@ -9,6 +9,8 @@ export type Card = {
   aliases: string | null;
   color: string;
   active: boolean;
+  /** Creada automáticamente desde un correo: pendiente de que le pongas nombre. */
+  needs_name: boolean;
 };
 export type Category = { id: number; name: string; color: string };
 export type Rule = {
@@ -34,4 +36,13 @@ export type Transaction = {
   category_color: string | null;
   source: Source;
   notes: string | null;
+  kind: TxKind;
+  is_recurring: boolean;
+  sources: string;
+  auth_code: string | null;
+  /** Domiciliación: últimos dígitos de la cuenta de cargo (referencia, no una tarjeta). */
+  account_ref: string | null;
+  /** Tarjeta Banamex, solo Atajo y con más de 24 h sin correo del banco. */
+  unconfirmed: boolean;
 };
+export type TxKind = "expense" | "card_payment";

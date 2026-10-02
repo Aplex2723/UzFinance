@@ -44,7 +44,7 @@ Tracker personal de gastos con tarjetas (American Express, Banamex, Nu). Los gas
 | Web | Next.js 16 (App Router) + TypeScript + Tailwind v4; gráficas con Recharts y d3-sankey; validación con zod |
 | Datos | SQL Server (Azure SQL en prod, SQL Server 2022 en docker local → mismo motor); consultas parametrizadas; montos en **centavos enteros**; reembolsos = monto negativo |
 | Ingesta | `POST /api/ingest` → valida (zod estricto) → resuelve tarjeta (nombre, alias o últimos 4) → categoriza (reglas) → deduplica por hash |
-| Fuentes | Interfaz `TransactionSource`: `shortcut` y `statement` (CSV genérico) implementadas; `email` es un **stub documentado** (`src/lib/sources/email.ts`) |
+| Fuentes | Interfaz `TransactionSource`: `shortcut` y `statement` (CSV genérico) implementadas. Correos de Banamex: ver [Ingesta de correos de Banamex](#ingesta-de-correos-de-banamex) |
 | Categorización | Interfaz `Categorizer`: reglas por defecto; `CATEGORIZER=llm` enchufa un LLM (hoy stub que delega en reglas, `src/lib/categorizer/llm.ts`) |
 | Tiempo real | `LiveRefresh` revisa `/api/changes` con la pestaña visible y actividad reciente, y al volver a la pestaña; refresca solo cuando algo cambió |
 
@@ -54,7 +54,7 @@ Tracker personal de gastos con tarjetas (American Express, Banamex, Nu). Los gas
 
 | Control | Cómo |
 |---|---|
-| Todo exige sesión | Easy Auth con Entra ID; **única excepción** `/api/ingest` (`excludedPaths`) |
+| Todo exige sesión | Easy Auth con Entra ID; **únicas excepciones** `/api/ingest` y `/api/ingest/email` (`excludedPaths`), cada una con su propio token |
 | Defensa en profundidad | El servidor valida `X-MS-CLIENT-PRINCIPAL` y compara el correo con `ALLOWED_EMAIL`. Match robusto del UPN de invitado (`usuario_gmail.com#EXT#@tenant`) además del claim `email`; y opcionalmente `tid` |
 | Solo tu cuenta | Asignación de usuario obligatoria en la enterprise app + `allowedPrincipals` (tu object id) + `WEBSITE_AUTH_AAD_ALLOWED_TENANTS` + allowlist en código |
 | Login sin secreto | Easy Auth usa una *federated identity credential* sobre una Managed Identity (no hay client secret) |
@@ -80,6 +80,7 @@ Plantilla en [`.env.example`](.env.example). En Azure son *App Settings*.
 | `AUTH_MODE` | `dev` | `easyauth` | `dev` salta el login (solo local; bloqueado en producción) |
 | `ALLOWED_EMAIL` | tu correo | tu correo | Allowlist del correo que puede entrar |
 | `ALLOWED_TENANT_ID` | — | tenant | Si se define, el claim `tid` debe coincidir |
+| `EMAIL_INGEST_TOKENS` | aleatorio | aleatorio | Tokens del puente Gmail, `nombre=token,otro=token` (cada token ≥ 32). **Distinto** de `INGEST_TOKEN`; sin definir, el endpoint rechaza todo |
 | `INGEST_TOKEN` | aleatorio | aleatorio | Token Bearer de `/api/ingest` (≥ 32 caracteres) |
 | `INGEST_TOKEN_PREVIOUS` | — | solo en rotación | Token anterior aún válido durante la rotación |
 | `CATEGORIZER` | `rules` | `rules` | `rules` o `llm` (stub) |
@@ -193,6 +194,60 @@ az webapp log tail   -g rg-uzfinance -n uzfinance-092d5
 # Cupo gratuito restante de la base (vCore-segundos)
 DBID=$(az sql db show -g rg-uzfinance -s uzfinance-sql-092d5 -n uzfinance --query id -o tsv)
 az monitor metrics list --resource $DBID --metric free_amount_remaining --interval PT1H --aggregation Minimum -o table
+```
+
+## Ingesta de correos de Banamex
+
+Un Google Apps Script en tu Gmail (`integrations/gmail-apps-script/`, con su propia guía) envía cada 5 min los avisos de
+`notificaciones@banamex.com` a `POST /api/ingest/email`. Cuerpo: `{messageId, from, subject, receivedAt, bodyText}`.
+
+| Respuesta | Significado |
+|---|---|
+| `200 {status: created \| merged \| duplicate \| ignored \| unparsed}` | resultado idempotente (reenviar no duplica) |
+| `400` payload inválido · `403` remitente distinto de `notificaciones@banamex.com` · `413` > 64 KB · `415` no JSON | |
+| `401` token inválido · `429` demasiados intentos · `503` base despertando (reintentar) | |
+
+`X-Dry-Run: 1` valida y reporta cómo se interpretaría (`parsed` / `ignored` / `unparsed` + motivo) sin escribir.
+
+**Seguridad.** Token Bearer propio (varios con nombre, comparación en tiempo constante), distinto al del Atajo para revocarlos por
+separado; fuera de Easy Auth; límite de 64 KB; 120 req/min por IP y bloqueo tras 10 tokens inválidos. El cuerpo del correo es entrada **no
+confiable**: regex acotadas sobre etiquetas conocidas, nada se interpreta como instrucción, no se registra en logs y **no se guarda**
+(solo campos interpretados + `messageId`). Un correo que no se entiende se guarda en `unparsed_emails` **sin cuerpo** (id, remitente,
+asunto, fecha y motivo) y aparece en el dashboard como *Pendiente de revisión*.
+
+**Parser** (`src/lib/sources/banamex-email.ts`, puro y probado con fixtures ficticios): despacha por asunto; lee la fila «Fecha y hora»
+(no el encabezado) en 4 formatos, zona UTC-6 fija → se guarda en UTC; monto en centavos (acepta `$ 159.00 M.N.`; otra moneda → pendiente);
+solo `Estatus = Exitoso` cuando existe. Comercio crudo + normalizado (sin sufijos de ciudad/país) → `category_rules`.
+
+| Asunto | `kind` |
+|---|---|
+| Retiro/Compra con tarjeta Banamex / tarjeta adicional / cuenta Banamex | `expense` |
+| Cargo a cuenta para pago a Establecimiento | `expense` recurrente; **`card_payment`** si el comercio es una tarjeta mía (lista editable en *Configuración → Domiciliaciones que son pago de tarjeta*; por defecto American Express / Amex) |
+| Depósito a Cuenta o Tarjeta Banamex | `card_payment` (si es a una cuenta de débito, se ignora) |
+| Alta/modificación de cuenta, NIP, preferencias, rechazos, límites, ahorro fácil, bienvenida | ignorado |
+
+`card_payment` queda fuera de **todos** los totales y gráficas (si no, sumaría doble con las compras de la Amex) y se muestra en
+*Pagos de tarjeta* (Inicio y `/transacciones?kind=card_payment`).
+
+**Tarjetas.** Clave única = **producto + bandera de adicional + dígitos** (`EXPLORA-BANAMEX|ADIC|000`; el débito usa producto `DEBITO`). Si ya
+tienes una tarjeta Banamex con esos dígitos se adopta; si no, se crea **sin nombrar** y el dashboard te pide nombrarla (y ponerle el alias de Wallet).
+Las **domiciliaciones no crean tarjeta**: la «Cuenta de cargo» se guarda como referencia de la transacción (`account_ref`, se muestra
+«Domiciliación ···NNN») y el cargo cuelga de una tarjeta de sistema llamada *Domiciliación*. Un **pago de tarjeta** por domiciliación se
+liga a la tarjeta cuyos últimos dígitos coincidan con la «Referencia establecimiento» del correo (solo si es inequívoca; si no, a *Domiciliación*).
+Fechas: se interpretan en la zona IANA de la app (`America/Mexico_City`, `src/lib/time.ts`) y se guardan en UTC.
+
+**Fusión con el Atajo.** Misma tarjeta + mismo monto + ≤ 15 min → una sola transacción, en cualquier orden de llegada. El correo manda
+(comercio, autorización, fecha, estatus) y la fila conserva `sources = shortcut,email`. Los reintentos del Atajo después de fusionar siguen
+siendo duplicados (`merged_hashes`). Un Atajo en tarjeta Banamex sin correo tras 24 h se marca *Sin confirmación bancaria* (la Amex no aplica).
+Límite conocido: dos compras idénticas (misma tarjeta y monto) a < 15 min entre sí pueden cruzarse si solo llega un correo.
+
+**Tokens del puente.**
+
+```bash
+# crear (no lo pegues en chats ni en el repo)
+openssl rand -base64 36 | tr '+/' '-_'
+# publicar: nombre=token; para rotar, deja ambos un rato (gmail=NUEVO,viejo=ANTERIOR) y luego quita el viejo
+az webapp config appsettings set -g rg-uzfinance -n uzfinance-092d5 --settings "EMAIL_INGEST_TOKENS=gmail=<token>"
 ```
 
 ## Rotación del token de ingesta

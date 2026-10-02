@@ -4,13 +4,16 @@ import { authenticate } from "@/lib/auth/session";
 /**
  * Defensa en profundidad + CSP con nonce.
  *  1) Valida la sesión de Easy Auth (X-MS-CLIENT-PRINCIPAL + allowlist) para todo
- *     salvo /api/ingest, que se autentica con su propio token Bearer.
+ *     salvo /api/ingest y /api/ingest/email, que usan su propio token Bearer.
  *  2) Cada handler y página vuelve a validar: este archivo no es la única barrera.
  */
+/** Fuera de Easy Auth: cada uno se autentica con su propio token Bearer. */
+const TOKEN_AUTH_PATHS = new Set(["/api/ingest", "/api/ingest/email"]);
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname !== "/api/ingest") {
+  if (!TOKEN_AUTH_PATHS.has(pathname)) {
     const auth = authenticate(request.headers);
     if (!auth.ok) {
       const msg = auth.status === 401 ? "No autenticado" : "No autorizado";

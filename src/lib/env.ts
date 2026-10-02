@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+/** "gmail=abc…,viejo=def…" → [{name, token}]; null si el formato es inválido. */
+export function parseNamedTokens(raw: string): { name: string; token: string }[] | null {
+  const out: { name: string; token: string }[] = [];
+  for (const part of raw.split(",").map((p) => p.trim()).filter(Boolean)) {
+    const i = part.indexOf("=");
+    const name = part.slice(0, i);
+    const token = part.slice(i + 1);
+    if (i < 1 || !/^[a-z0-9_-]{1,30}$/.test(name) || token.length < 32) return null;
+    out.push({ name, token });
+  }
+  return out;
+}
+
 const schema = z.object({
   NODE_ENV: z.string().default("development"),
   AUTH_MODE: z.enum(["dev", "easyauth"]).default("easyauth"),
@@ -9,6 +22,14 @@ const schema = z.object({
   INGEST_TOKEN: z.string().min(32, "INGEST_TOKEN debe tener al menos 32 caracteres"),
   /** Token anterior, aceptado durante la rotación (ver README). */
   INGEST_TOKEN_PREVIOUS: z.string().min(32).optional(),
+  /**
+   * Tokens del puente Gmail (Apps Script), DISTINTOS al del Atajo: "nombre=token,otro=token".
+   * Sin definir, /api/ingest/email rechaza todo (falla cerrado).
+   */
+  EMAIL_INGEST_TOKENS: z
+    .string()
+    .optional()
+    .refine((v) => !v || parseNamedTokens(v) !== null, "EMAIL_INGEST_TOKENS: formato nombre=token (token ≥ 32 caracteres)"),
   CATEGORIZER: z.enum(["rules", "llm"]).default("rules"),
   DB_SERVER: z.string().min(1),
   DB_PORT: z.coerce.number().default(1433),

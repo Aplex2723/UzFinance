@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = protectedRoute(async ({ req }) => {
   const q = parseQuery(req, listQuery);
-  return json(await listTransactions({ q: q.q, cardId: q.card, categoryId: q.category, month: q.month, limit: q.limit, offset: q.offset }));
+  return json(await listTransactions({ q: q.q, cardId: q.card, categoryId: q.category, month: q.month, kind: q.kind, limit: q.limit, offset: q.offset }));
 });
 
 export const POST = protectedRoute(async ({ req }) => {

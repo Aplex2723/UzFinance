@@ -12,7 +12,7 @@ export function cutoffDay(month: string, now = new Date()): number {
 async function dailyTotals(from: string, to: string, cardId?: number): Promise<Map<string, number>> {
   const rows = await query<{ d: string; cents: number }>(
     `SELECT CONVERT(char(10), occurred_date, 23) AS d, CAST(SUM(amount_cents) AS float) AS cents
-     FROM dbo.transactions WHERE occurred_date BETWEEN @from AND @to ${cardId ? "AND card_id=@card" : ""}
+     FROM dbo.transactions WHERE kind = 'expense' AND occurred_date BETWEEN @from AND @to ${cardId ? "AND card_id=@card" : ""}
      GROUP BY occurred_date`,
     { from: t.date(from), to: t.date(to), ...(cardId ? { card: t.int(cardId) } : {}) },
   );
@@ -29,7 +29,7 @@ export async function getOverview(month: string, now = new Date()) {
     query<{ issuer: Issuer; cents: number; n: number }>(
       `SELECT c.issuer, CAST(SUM(x.amount_cents) AS float) AS cents, COUNT(*) AS n
        FROM dbo.transactions x JOIN dbo.cards c ON c.id = x.card_id
-       WHERE x.occurred_date BETWEEN @from AND @to GROUP BY c.issuer`,
+       WHERE x.kind = 'expense' AND x.occurred_date BETWEEN @from AND @to GROUP BY c.issuer`,
       { from: t.date(day(m, 1)), to: t.date(day(m, c)) },
     );
   const [cur, prv] = await Promise.all([sumQ(month, cut), sumQ(prev, prevCut)]);
@@ -57,7 +57,7 @@ export async function getCardSummaries(month: string, now = new Date()) {
     `SELECT c.id, c.name, c.issuer, c.last4, c.color,
        CAST(ISNULL(SUM(CASE WHEN x.occurred_date BETWEEN @cf AND @ct THEN x.amount_cents END), 0) AS float) AS cur,
        CAST(ISNULL(SUM(CASE WHEN x.occurred_date BETWEEN @pf AND @pt THEN x.amount_cents END), 0) AS float) AS prv
-     FROM dbo.cards c LEFT JOIN dbo.transactions x ON x.card_id = c.id
+     FROM dbo.cards c LEFT JOIN dbo.transactions x ON x.card_id = c.id AND x.kind = 'expense'
      WHERE c.active = 1 GROUP BY c.id, c.name, c.issuer, c.last4, c.color ORDER BY c.issuer, c.name`,
     { cf: t.date(day(month, 1)), ct: t.date(day(month, cut)), pf: t.date(day(prev, 1)), pt: t.date(day(prev, prevCut)) },
   );
@@ -103,7 +103,7 @@ export async function getCumulative(month: string, now = new Date()) {
 export async function getWeekdayTotals(month: string) {
   const rows = await query<{ wd: number; cents: number }>(
     `SELECT DATEDIFF(day, '19000101', occurred_date) % 7 AS wd, CAST(SUM(amount_cents) AS float) AS cents
-     FROM dbo.transactions WHERE occurred_date BETWEEN @from AND @to GROUP BY DATEDIFF(day, '19000101', occurred_date) % 7`,
+     FROM dbo.transactions WHERE kind = 'expense' AND occurred_date BETWEEN @from AND @to GROUP BY DATEDIFF(day, '19000101', occurred_date) % 7`,
     { from: t.date(day(month, 1)), to: t.date(day(month, daysInMonth(month))) },
   );
   return Array.from({ length: 7 }, (_, i) => N(rows.find((r) => N(r.wd) === i)?.cents));
@@ -113,7 +113,7 @@ export async function getSankey(month: string) {
   const rows = await query<{ card: string; category: string | null; color: string | null; cents: number }>(
     `SELECT c.name AS card, k.name AS category, k.color, CAST(SUM(x.amount_cents) AS float) AS cents
      FROM dbo.transactions x JOIN dbo.cards c ON c.id = x.card_id LEFT JOIN dbo.categories k ON k.id = x.category_id
-     WHERE x.occurred_date BETWEEN @from AND @to GROUP BY c.name, k.name, k.color HAVING SUM(x.amount_cents) > 0`,
+     WHERE x.kind = 'expense' AND x.occurred_date BETWEEN @from AND @to GROUP BY c.name, k.name, k.color HAVING SUM(x.amount_cents) > 0`,
     { from: t.date(day(month, 1)), to: t.date(day(month, daysInMonth(month))) },
   );
   return rows.map((r) => ({ card: r.card, category: r.category ?? "Sin categoría", color: r.color ?? "#6b7280", cents: N(r.cents) }));
@@ -139,7 +139,7 @@ export async function getCategoryBreakdown(month: string) {
   const rows = await query<{ name: string | null; color: string | null; cents: number; n: number }>(
     `SELECT k.name, k.color, CAST(SUM(x.amount_cents) AS float) AS cents, COUNT(*) AS n
      FROM dbo.transactions x LEFT JOIN dbo.categories k ON k.id = x.category_id
-     WHERE x.occurred_date BETWEEN @from AND @to GROUP BY k.name, k.color ORDER BY SUM(x.amount_cents) DESC`,
+     WHERE x.kind = 'expense' AND x.occurred_date BETWEEN @from AND @to GROUP BY k.name, k.color ORDER BY SUM(x.amount_cents) DESC`,
     { from: t.date(day(month, 1)), to: t.date(day(month, daysInMonth(month))) },
   );
   return rows.map((r) => ({ name: r.name ?? "Sin categoría", color: r.color ?? "#6b7280", cents: N(r.cents), count: N(r.n) }));
@@ -148,7 +148,7 @@ export async function getCategoryBreakdown(month: string) {
 export async function getMonthlyTrend(months = 12, now = new Date()) {
   const rows = await query<{ m: string; cents: number }>(
     `SELECT FORMAT(occurred_date, 'yyyy-MM') AS m, CAST(SUM(amount_cents) AS float) AS cents
-     FROM dbo.transactions WHERE occurred_date >= DATEADD(month, -@n, DATEFROMPARTS(YEAR(@today), MONTH(@today), 1))
+     FROM dbo.transactions WHERE kind = 'expense' AND occurred_date >= DATEADD(month, -@n, DATEFROMPARTS(YEAR(@today), MONTH(@today), 1))
      GROUP BY FORMAT(occurred_date, 'yyyy-MM') ORDER BY m`,
     { n: t.int(months - 1), today: t.date(localDate(now)) },
   );
@@ -160,7 +160,7 @@ export async function getRecurring(now = new Date()) {
   const rows = await query<{ merchant: string; card: string; months: number; avg: number; last: string; last_amount: number; mn: number; mx: number }>(
     `WITH x AS (
        SELECT merchant_normalized AS merchant, card_id, FORMAT(occurred_date,'yyyy-MM') AS m, amount_cents, occurred_date
-       FROM dbo.transactions WHERE amount_cents > 0 AND occurred_date >= DATEADD(month, -5, DATEFROMPARTS(YEAR(@today), MONTH(@today), 1))
+       FROM dbo.transactions WHERE kind = 'expense' AND amount_cents > 0 AND occurred_date >= DATEADD(month, -5, DATEFROMPARTS(YEAR(@today), MONTH(@today), 1))
      )
      SELECT x.merchant, c.name AS card, COUNT(DISTINCT x.m) AS months, CAST(AVG(CAST(x.amount_cents AS float)) AS float) AS avg,
             CONVERT(char(10), MAX(x.occurred_date), 23) AS last, CAST(MIN(x.amount_cents) AS float) AS mn, CAST(MAX(x.amount_cents) AS float) AS mx,

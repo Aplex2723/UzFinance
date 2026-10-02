@@ -1,6 +1,7 @@
 import { query } from "@/lib/db/pool";
 
 export const ALLOWED = "uziel.francotorres@gmail.com";
+export const EMAIL_TOKEN = "email-token-0123456789-abcdefghijklmnopqrstuvwxyz";
 export const TOKEN = "test-token-0123456789-abcdefghijklmnopqrstuvwxyz";
 
 export function principalHeader(claims: { typ: string; val: string }[]) {
@@ -26,5 +27,5 @@ export const authed = (extra: Record<string, string> = {}) => ({ "x-ms-client-pr
 export const ctx = <P extends Record<string, string>>(p?: P) => ({ params: Promise.resolve((p ?? {}) as P) });
 
 export async function resetDb() {
-  await query("DELETE FROM dbo.transactions; DELETE FROM dbo.category_rules; DELETE FROM dbo.categories; DELETE FROM dbo.cards;");
+  await query("DELETE FROM dbo.unparsed_emails; DELETE FROM dbo.transactions; DELETE FROM dbo.category_rules; DELETE FROM dbo.categories; DELETE FROM dbo.cards;");
 }

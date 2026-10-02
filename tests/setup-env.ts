@@ -13,3 +13,4 @@ delete process.env.ALLOWED_TENANT_ID;
 process.env.CATEGORIZER = "rules";
 process.env.DB_TRUST_SERVER_CERT = "true";
 process.env.DB_SERVER ??= "localhost";
+process.env.EMAIL_INGEST_TOKENS = "gmail=email-token-0123456789-abcdefghijklmnopqrstuvwxyz,viejo=old-email-token-0123456789-abcdefghijklmnopqrstuvwx";

@@ -12,18 +12,22 @@ const SELECT = `
   SELECT x.id, x.occurred_at, CONVERT(char(10), x.occurred_date, 23) AS occurred_date,
          CAST(x.amount_cents AS float) AS amount_cents, x.currency, x.merchant_raw, x.merchant_normalized,
          x.card_id, c.name AS card_name, c.issuer, x.category_id, k.name AS category_name, k.color AS category_color,
-         x.source, x.notes
+         x.source, x.notes, x.kind, x.is_recurring, x.sources, x.auth_code, x.account_ref,
+         CAST(CASE WHEN c.issuer = 'banamex' AND x.kind = 'expense' AND x.sources = 'shortcut'
+                    AND x.occurred_at < DATEADD(hour, -24, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS bit) AS unconfirmed
   FROM dbo.transactions x
   JOIN dbo.cards c ON c.id = x.card_id
   LEFT JOIN dbo.categories k ON k.id = x.category_id`;
 
-type Row = Omit<Transaction, "occurred_at"> & { occurred_at: Date };
-const map = (r: Row): Transaction => ({ ...r, occurred_at: r.occurred_at.toISOString() });
+type Row = Omit<Transaction, "occurred_at" | "is_recurring" | "unconfirmed"> & { occurred_at: Date; is_recurring: boolean | number; unconfirmed: boolean | number };
+const map = (r: Row): Transaction => ({ ...r, occurred_at: r.occurred_at.toISOString(), is_recurring: !!r.is_recurring, unconfirmed: !!r.unconfirmed });
 
 export type TxFilter = {
   q?: string;
   cardId?: number;
   categoryId?: number | "none";
+  /** Por defecto solo gastos: los pagos de tarjeta no cuentan como gasto. */
+  kind?: "expense" | "card_payment" | "all";
   month?: string; // YYYY-MM
   from?: string;
   to?: string;
@@ -32,7 +36,7 @@ export type TxFilter = {
 };
 
 export async function listTransactions(f: TxFilter = {}): Promise<{ rows: Transaction[]; total: number }> {
-  const where: string[] = ["1=1"];
+  const where: string[] = [f.kind === "all" ? "1=1" : `x.kind = '${f.kind === "card_payment" ? "card_payment" : "expense"}'`];
   const params: Record<string, ReturnType<(typeof t)[keyof typeof t]>> = {};
   if (f.q) {
     where.push("(x.merchant_normalized LIKE @q ESCAPE '\\' OR x.merchant_raw LIKE @q ESCAPE '\\' OR x.notes LIKE @q ESCAPE '\\')");
@@ -75,7 +79,11 @@ export function dedupeHash(p: { cardId: number; occurredAt: Date; cents: number;
 
 export type IngestResult =
   | { status: "inserted"; id: number; cardMatched: boolean; categoryId: number | null }
+  | { status: "merged"; id: number; cardMatched: boolean }
   | { status: "duplicate"; cardMatched: boolean };
+
+/** Ventana de fusión Atajo ↔ correo. */
+export const MERGE_WINDOW_SECONDS = 15 * 60;
 
 export async function ingestTransaction(
   raw: RawTransaction,
@@ -86,6 +94,32 @@ export async function ingestTransaction(
   const { card, matched } = await resolveCard(raw.cardRef);
   const hash = dedupeHash({ cardId: card.id, occurredAt: raw.occurredAt, cents: raw.amountCents, merchantNormalized, source });
   const occurredDate = localDate(raw.occurredAt);
+
+  // Reintento de un Atajo que ya se fusionó con su correo: no crea otra fila.
+  if (source === "shortcut") {
+    const seen = await query("SELECT TOP 1 tx_id FROM dbo.merged_hashes WHERE hash=@h", { h: t.char(hash) });
+    if (seen.length) return { status: "duplicate", cardMatched: matched };
+
+    // Correo → Atajo: si el correo del banco llegó primero, el Atajo solo se anota como segunda fuente.
+    const mail = await query<{ id: number }>(
+      `SELECT TOP 1 id FROM dbo.transactions
+       WHERE card_id=@c AND amount_cents=@a AND kind='expense' AND email_message_id IS NOT NULL AND sources NOT LIKE '%shortcut%'
+         AND ABS(DATEDIFF(second, occurred_at, @at)) <= @win
+       ORDER BY ABS(DATEDIFF(second, occurred_at, @at)), id`,
+      { c: t.int(card.id), a: t.big(raw.amountCents), at: t.dt(raw.occurredAt), win: t.int(MERGE_WINDOW_SECONDS) },
+    );
+    if (mail[0]) {
+      const id = Number(mail[0].id);
+      try {
+        await query("INSERT dbo.merged_hashes (hash, tx_id) VALUES (@h, @id)", { h: t.char(hash), id: t.big(id) });
+      } catch (e) {
+        if (isUniqueViolation(e)) return { status: "duplicate", cardMatched: matched };
+        throw e;
+      }
+      await query("UPDATE dbo.transactions SET sources = LEFT(sources + ',shortcut', 40) WHERE id=@id", { id: t.big(id) });
+      return { status: "merged", id, cardMatched: matched };
+    }
+  }
 
   if (source === "statement") {
     // El comercio del estado de cuenta rara vez coincide con el de Wallet:
@@ -105,9 +139,9 @@ export async function ingestTransaction(
 
   try {
     const r = await query<{ id: number }>(
-      `INSERT dbo.transactions (occurred_at, occurred_date, amount_cents, merchant_raw, merchant_normalized, card_id, category_id, source, dedupe_hash, notes)
+      `INSERT dbo.transactions (occurred_at, occurred_date, amount_cents, merchant_raw, merchant_normalized, card_id, category_id, source, sources, dedupe_hash, notes)
        OUTPUT INSERTED.id
-       VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, @src, @hash, @notes)`,
+       VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, @src, @src, @hash, @notes)`,
       {
         at: t.dt(raw.occurredAt), date: t.date(occurredDate), amt: t.big(raw.amountCents),
         raw: t.str(raw.merchant), norm: t.str(merchantNormalized), card: t.int(card.id), cat: t.int(categoryId),
@@ -148,8 +182,8 @@ export async function createManual(p: TxPatch): Promise<IngestResult> {
   const hash = dedupeHash({ cardId: p.cardId, occurredAt: p.occurredAt, cents: p.amountCents, merchantNormalized, source: "manual" });
   try {
     const r = await query<{ id: number }>(
-      `INSERT dbo.transactions (occurred_at, occurred_date, amount_cents, merchant_raw, merchant_normalized, card_id, category_id, source, dedupe_hash, notes)
-       OUTPUT INSERTED.id VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, 'manual', @hash, @notes)`,
+      `INSERT dbo.transactions (occurred_at, occurred_date, amount_cents, merchant_raw, merchant_normalized, card_id, category_id, source, sources, dedupe_hash, notes)
+       OUTPUT INSERTED.id VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, 'manual', 'manual', @hash, @notes)`,
       {
         at: t.dt(p.occurredAt), date: t.date(localDate(p.occurredAt)), amt: t.big(p.amountCents), raw: t.str(p.merchant),
         norm: t.str(merchantNormalized), card: t.int(p.cardId), cat: t.int(p.categoryId), hash: t.char(hash), notes: t.str(p.notes),
@@ -209,10 +243,12 @@ export async function categorizeUncategorized(): Promise<{ updated: number; rema
  * Una sola consulta agregada: suficiente para datos personales.
  */
 export async function getChangeRevision(): Promise<string> {
-  const r = await query<{ n: number; m: number; h: number }>(
+  const r = await query<{ n: number; m: number; h: number; u: number; c: number }>(
     `SELECT COUNT_BIG(*) AS n, CAST(ISNULL(MAX(id), 0) AS float) AS m,
-            CAST(ISNULL(CHECKSUM_AGG(CHECKSUM(id, amount_cents, category_id, card_id, occurred_at, merchant_raw)), 0) AS float) AS h
+            CAST(ISNULL(CHECKSUM_AGG(CHECKSUM(id, amount_cents, category_id, card_id, occurred_at, merchant_raw, kind, sources)), 0) AS float) AS h,
+            (SELECT COUNT_BIG(*) FROM dbo.unparsed_emails) AS u,
+            (SELECT COUNT_BIG(*) FROM dbo.cards WHERE needs_name = 1) AS c
      FROM dbo.transactions`,
   );
-  return `${r[0].n}-${r[0].m}-${r[0].h}`;
+  return `${r[0].n}-${r[0].m}-${r[0].h}-${r[0].u}-${r[0].c}`;
 }

@@ -8,9 +8,12 @@ import { WeekdayBars } from "@/components/charts/WeekdayBars";
 import { DashboardActions } from "@/components/DashboardActions";
 import { MonthNav } from "@/components/MonthNav";
 import { RecentActivity } from "@/components/RecentActivity";
+import { ReviewPanel } from "@/components/ReviewPanel";
 import { Delta } from "@/components/ui/Delta";
 import { Panel } from "@/components/ui/Panel";
 import { requirePageUser } from "@/lib/auth/page";
+import { listCards } from "@/lib/repo/cards";
+import { listUnparsed } from "@/lib/repo/emails";
 import { ISSUER_LABEL, monthLabel } from "@/lib/format";
 import { formatMXN } from "@/lib/money";
 import { getCardSummaries, getCumulative, getHeatmap, getOverview, getSankey, getWeekdayTotals } from "@/lib/repo/stats";
@@ -23,7 +26,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const raw = typeof sp.month === "string" ? sp.month : undefined;
   const month = raw && MONTH_RE.test(raw) ? raw : currentMonth();
 
-  const [overview, cards, cumulative, weekday, recent, sankey, heat] = await Promise.all([
+  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments] = await Promise.all([
     getOverview(month),
     getCardSummaries(month),
     getCumulative(month),
@@ -31,10 +34,15 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     listTransactions({ limit: 6 }),
     getSankey(month),
     getHeatmap(12),
+    listCards(false),
+    listUnparsed(),
+    listTransactions({ kind: "card_payment", month, limit: 20 }),
   ]);
+  const paymentsTotal = payments.rows.reduce((a, r) => a + r.amount_cents, 0);
 
   return (
     <div className="flex flex-col gap-4">
+      <ReviewPanel unnamed={allCards.filter((c) => c.needs_name)} unparsed={unparsed} />
       <section aria-labelledby="total-title" className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 id="total-title" className="text-[12px] text-muted">Total gastado · {monthLabel(month)}</h1>
@@ -99,6 +107,17 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           <Heatmap cells={heat.cells} weeks={heat.weeks} />
         </Panel>
       </div>
+
+      {payments.rows.length > 0 && (
+        <Panel
+          title={`Pagos de tarjeta · ${monthLabel(month)} (no cuentan como gasto)`}
+          action={<Link href={`/transacciones?kind=card_payment&month=${month}`} className="btn !h-7 !px-2.5 text-[11px]">Ver todo</Link>}
+          className="" 
+        >
+          <p className="mb-2 text-muted">Total pagado: <b className="num text-fg" data-testid="payments-total">{formatMXN(paymentsTotal)}</b></p>
+          <RecentActivity rows={payments.rows.slice(0, 5)} />
+        </Panel>
+      )}
     </div>
   );
 }

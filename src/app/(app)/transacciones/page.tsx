@@ -19,7 +19,7 @@ export default async function Page({ searchParams }: PageProps<"/transacciones">
   const page = Math.max(1, Number(flat.page) || 1);
   const [cards, categories, { rows, total }] = await Promise.all([
     listCards(true), listCategories(),
-    listTransactions({ q: f.q, cardId: f.card, categoryId: f.category, month: f.month, limit: PAGE, offset: (page - 1) * PAGE }),
+    listTransactions({ q: f.q, cardId: f.card, categoryId: f.category, month: f.month, kind: f.kind === "card_payment" ? "card_payment" : "expense", limit: PAGE, offset: (page - 1) * PAGE }),
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const qs = (p: number) => { const u = new URLSearchParams(flat as Record<string, string>); u.set("page", String(p)); return `/transacciones?${u}`; };
@@ -27,8 +27,13 @@ export default async function Page({ searchParams }: PageProps<"/transacciones">
   return (
     <>
       <PageTitle title="Transacciones" subtitle={`${total.toLocaleString("es-MX")} movimientos`} action={f.month ? <MonthNav month={f.month} base="/transacciones" /> : undefined} />
+      <nav aria-label="Tipo de movimiento" className="mb-3 flex gap-2">
+        <Link href="/transacciones" className={`btn ${f.kind !== "card_payment" ? "btn-primary" : ""}`} aria-current={f.kind !== "card_payment" ? "page" : undefined}>Gastos</Link>
+        <Link href="/transacciones?kind=card_payment" className={`btn ${f.kind === "card_payment" ? "btn-primary" : ""}`} aria-current={f.kind === "card_payment" ? "page" : undefined}>Pagos de tarjeta</Link>
+      </nav>
       <Panel>
         <form method="get" className="mb-4 grid gap-2 sm:grid-cols-[1fr_160px_160px_150px_auto]" role="search" aria-label="Filtrar transacciones">
+          {f.kind === "card_payment" && <input type="hidden" name="kind" value="card_payment" />}
           <input name="q" defaultValue={f.q} placeholder="Buscar comercio o nota" className="field" aria-label="Buscar" maxLength={100} />
           <select name="card" defaultValue={f.card ?? ""} className="field" aria-label="Tarjeta"><option value="">Todas las tarjetas</option>{cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
           <select name="category" defaultValue={f.category ?? ""} className="field" aria-label="Categoría"><option value="">Todas las categorías</option><option value="none">Sin categoría</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>

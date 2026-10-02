@@ -1,4 +1,6 @@
 import { headers } from "next/headers";
+import { PayeesManager } from "@/components/PayeesManager";
+import { listPayees } from "@/lib/repo/payees";
 import { PageTitle, Panel } from "@/components/ui/Panel";
 import { requirePageUser } from "@/lib/auth/page";
 import { getEnv } from "@/lib/env";
@@ -6,6 +8,7 @@ import { getEnv } from "@/lib/env";
 export default async function Page() {
   const user = await requirePageUser();
   const env = getEnv();
+  const payees = await listPayees();
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = host.startsWith("localhost") ? "http" : "https";
@@ -30,6 +33,7 @@ export default async function Page() {
           <p className="mt-3 text-muted">Header: <code className="text-fg">Authorization: Bearer &lt;INGEST_TOKEN&gt;</code></p>
           <p className="mt-3 text-[11px] text-muted">El token nunca se muestra aquí. Se guarda como app setting y se rota con el procedimiento del README (sección “Rotación del token”).</p>
         </Panel>
+        <PayeesManager payees={payees} />
       </div>
     </>
   );

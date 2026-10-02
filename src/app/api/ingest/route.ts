@@ -52,9 +52,9 @@ export async function POST(req: Request): Promise<Response> {
     if (req.headers.get("x-dry-run") === "1") return json({ status: "ok", dryRun: true });
 
     const result = await ingestTransaction(raw, "shortcut", { categorizer: await getCategorizer() });
-    return json(result.status === "inserted"
-      ? { status: "inserted", id: result.id, cardMatched: result.cardMatched }
-      : { status: "duplicate", cardMatched: result.cardMatched });
+    return json(result.status === "duplicate"
+      ? { status: "duplicate", cardMatched: result.cardMatched }
+      : { status: result.status, id: result.id, cardMatched: result.cardMatched });
   } catch (e) {
     if (e instanceof z.ZodError || e instanceof HttpError || e instanceof BodyTooLargeError) return errorResponse(e);
     // Base no disponible (p. ej. reanudando de auto-pause): 503 para que el Atajo reintente.

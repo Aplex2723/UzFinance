@@ -31,7 +31,13 @@ export function TransactionsTable({ rows }: { rows: Transaction[] }) {
             </div>
             <div className="min-w-0 flex-1 basis-[180px]">
               <p className="truncate font-medium">{r.merchant_raw}</p>
-              <p className="truncate text-[11px] text-muted">{r.card_name} · {r.source}{r.notes ? ` · ${r.notes}` : ""}</p>
+              <p className="truncate text-[11px] text-muted">{r.account_ref ? `Domiciliación ···${r.account_ref}` : r.card_name} · {r.sources.split(",").join(" + ")}{r.notes ? ` · ${r.notes}` : ""}</p>
+              {(r.unconfirmed || r.is_recurring) && (
+                <p className="mt-0.5 flex flex-wrap gap-1.5 text-[10px]">
+                  {r.unconfirmed && <span className="rounded-full border border-[#f59e0b]/50 px-2 py-0.5 text-[#f59e0b]" data-testid="unconfirmed">Sin confirmación bancaria</span>}
+                  {r.is_recurring && <span className="rounded-full border border-line px-2 py-0.5 text-muted">Recurrente</span>}
+                </p>
+              )}
             </div>
             <p className="hidden w-[130px] shrink-0 sm:block">
               {r.category_name ? (

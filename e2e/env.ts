@@ -10,6 +10,7 @@ export const E2E_ENV = {
   AUTH_MODE: "easyauth",
   ALLOWED_EMAIL: "uziel.francotorres@gmail.com",
   INGEST_TOKEN: E2E_TOKEN,
+  EMAIL_INGEST_TOKENS: "gmail=e2e-email-token-0123456789-abcdefghijklmnopqrstuvwxyz",
   DB_NAME: "uzfinance_e2e",
   DB_AUTH: "password",
   DB_SERVER: process.env.DB_SERVER ?? "localhost",
