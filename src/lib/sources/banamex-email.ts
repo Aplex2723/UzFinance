@@ -111,6 +111,7 @@ const LABELS = [
   "Fecha límite de pago",
   "Mínimo a pagar",
 ];
+const MAX_CELLS = 300;
 const LABEL_KEYS = new Set(LABELS.map(fold));
 const labelKey = (cell: string) => fold(cell).replace(/[:.]+$/, "").replace(/^no\.? ?autorizacion$/, "no. autorizacion");
 const KEY = (l: string) => labelKey(l);
@@ -128,7 +129,8 @@ export function toCells(body: string): string[] {
     text = text.replace(/\s+/g, " ").replace(re, "\n$1\n");
     cells = text.split("\n").map((c) => c.trim()).filter(Boolean);
   }
-  return cells;
+  // Un correo real tiene ~40 celdas: el tope evita trabajo cuadrático con entradas hostiles.
+  return cells.slice(0, MAX_CELLS);
 }
 
 /** Valor de una fila "Etiqueta | valor" (también "Etiqueta valor" en una misma celda). */
