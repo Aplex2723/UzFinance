@@ -32,6 +32,8 @@ var SUBJECTS = [
   'deposito a cuenta o tarjeta banamex'
 ];
 
+var ACCENTS = { a: 'á', e: 'é', i: 'í', o: 'ó', u: 'ú', A: 'Á', E: 'É', I: 'Í', O: 'Ó', U: 'Ú' };
+var ENTITIES = { ntilde: 'ñ', Ntilde: 'Ñ', iexcl: '¡', reg: '®', copy: '©' };
 var KNOWN_LABELS = ['monto', 'establecimiento', 'fecha y hora', 'estatus', 'no. autorizacion', 'operacion', 'cuenta de cargo',
   'referencia establecimiento', 'referencia 4', 'medio', 'fecha de corte', 'fecha limite de pago', 'minimo a pagar'];
 
@@ -237,6 +239,8 @@ function htmlToText_(html) {
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/&([aeiouAEIOU])(acute);/g, function (_, v) { return ACCENTS[v]; })
+    .replace(/&(ntilde|Ntilde|iexcl|reg|copy);/g, function (_, n) { return ENTITIES[n]; })
     .replace(/&#(\d+);/g, function (_, n) { return String.fromCharCode(Number(n)); });
   return t.split('\n').map(function (l) { return l.replace(/\s+/g, ' ').trim(); }).filter(Boolean).join('\n');
 }

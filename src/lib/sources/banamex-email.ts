@@ -123,11 +123,13 @@ const KEY = (l: string) => labelKey(l);
  */
 export function toCells(body: string): string[] {
   let text = body.slice(0, 60_000).replace(/\r/g, "\n");
-  let cells = text.split(/[\n\t|]+/).map((c) => c.trim()).filter(Boolean);
+  // Los valores llegan envueltos en asteriscos ("*$1,423.58*", "* ***0000*"): se quitan en los bordes de cada celda.
+  const clean = (c: string) => c.replace(/^[\s*]+|[\s*]+$/g, "");
+  let cells = text.split(/[\n\t|]+/).map(clean).filter(Boolean);
   if (cells.length < 4) {
     const re = new RegExp(`(${LABELS.map((l) => l.replace(/[.]/g, "\\.").replace(/ /g, "\\s+").replace(/[óo]/g, "[óo]").replace(/[íi]/g, "[íi]")).join("|")})`, "gi");
     text = text.replace(/\s+/g, " ").replace(re, "\n$1\n");
-    cells = text.split("\n").map((c) => c.trim()).filter(Boolean);
+    cells = text.split("\n").map(clean).filter(Boolean);
   }
   // Un correo real tiene ~40 celdas: el tope evita trabajo cuadrático con entradas hostiles.
   return cells.slice(0, MAX_CELLS);

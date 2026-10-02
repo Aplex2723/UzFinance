@@ -77,6 +77,14 @@ export const IGNORED_SUBJECTS = [
   "Cuenta MICUENTA te da la Bienvenida",
 ];
 
+const LABEL_LINE = /^(Monto|Establecimiento|Fecha y hora|Estatus|No\. Autorización|Operación|Cuenta de cargo|Referencia establecimiento|Referencia 4|Medio|Fecha de corte|Fecha límite de pago|Mínimo a pagar)$/;
+/**
+ * Formato REAL observado con getPlainBody(): líneas en blanco entre filas, etiquetas tal cual y cada valor
+ * envuelto en asteriscos (incluida la referencia "* ***0000*").
+ */
+export const asRealLayout = (body: string) =>
+  body.split("\n").map((l) => (LABEL_LINE.test(l) ? l : `*${l.startsWith("***") ? " " : ""}${l}*`)).join("\n\n");
+
 /** Mismo correo con otras formas de plano: todo en una línea, tabuladores y "|". */
 export const asOneLine = (body: string) => body.replace(/\n+/g, " ");
 const FIELDS = "(Monto|Establecimiento|Fecha y hora|Estatus|No\\. Autorización)";

@@ -173,6 +173,12 @@ describe("Apps Script: cuerpo desordenado → HTML", () => {
     w.call("processNew");
     expect(w.posts[0].body.bodyText).toBe("Monto\n$1,423.58\nEstablecimiento\nFERRETERIA & CIA\nFecha y hora\n2026/10/1 12:44:22 PM");
   });
+  it("decodifica entidades con acentos (&oacute;, &ntilde;…) para que las etiquetas sigan reconocibles", () => {
+    w.add(w.thread(), { plain: "sin etiquetas", html: "<td>Monto</td><td>$1.00</td><td>Fecha y hora</td><td>2026/10/1 1:00:00 AM</td><td>No. Autorizaci&oacute;n</td><td>Espa&ntilde;a &iexcl;Hola!</td>" });
+    w.call("processNew");
+    expect(w.posts[0].body.bodyText).toContain("No. Autorización");
+    expect(w.posts[0].body.bodyText).toContain("España ¡Hola!");
+  });
   it("si el texto plano está bien, se usa tal cual", () => {
     w.add(w.thread(), { html });
     w.call("processNew");

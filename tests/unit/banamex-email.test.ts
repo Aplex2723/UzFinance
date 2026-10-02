@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cardKey, classifySubject, isOwnCardPayee, normalizeBanamexMerchant, parseBanamexEmail, parseDateTime, parseMoney, SUPPORTED_SUBJECTS, toCells, zonedToUtc,
 } from "@/lib/sources/banamex-email";
-import { A, asOneLine, asPipes, asTabs, B, C, D, E, IGNORED_SUBJECTS } from "../fixtures/banamex-emails";
+import { A, asOneLine, asPipes, asRealLayout, asTabs, B, C, D, E, IGNORED_SUBJECTS } from "../fixtures/banamex-emails";
 
 type F = { subject: string; body: string; receivedAt: Date };
 const parse = (f: F) => parseBanamexEmail({ subject: f.subject, bodyText: f.body, receivedAt: f.receivedAt });
@@ -172,6 +172,18 @@ describe("correos corruptos o raros → unparsed, nunca excepción", () => {
 
 describe("toCells", () => {
   it("si todo viene en una línea, corta por etiquetas", () => expect(toCells("Monto $1.00 Estatus Exitoso").length).toBeGreaterThanOrEqual(4));
+});
+
+describe("formato real de getPlainBody(): líneas en blanco y valores entre asteriscos", () => {
+  it.each([["A", A], ["B", B], ["C", C], ["D (Amex)", D()], ["D (servicio)", D("NETFLIX COM", "$229.00")], ["E", E]] as [string, F][])("%s se interpreta igual que el formato limpio", (_n, f) => {
+    expect(tx({ ...f, body: asRealLayout(f.body) })).toEqual(tx(f));
+  });
+  it("monto, fecha, referencia y cuenta del correo D real (valores envueltos en *)", () => {
+    const body = "\n*Se realizó la domiciliación de tu pago*\n\nOperación\n\n*Cargo a cuenta para pago a Establecimiento*\n\nEstablecimiento\n\n*AMERICAN EXPRESS CO*\n\nCuenta de cargo\n\n*000*\n\nReferencia establecimiento\n\n* ***0000*\n\nReferencia 4\n\n*M00000000000000000 PYBO*\n\nMonto\n\n*$37,999.72*\n\nFecha y hora\n\n*01/10/26 20:17:22 PM*\n\nNo. Autorización\n\n*S000 0000000000*\n";
+    expect(tx({ subject: D().subject, body, receivedAt: D().receivedAt })).toMatchObject({
+      kind: "card_payment", amountCents: 3799972, accountRef: "000", payeeCardDigits: "0000", authCode: "S000 0000000000", merchantRaw: "AMERICAN EXPRESS CO",
+    });
+  });
 });
 
 describe("clave de tarjeta (producto + adicional + dígitos)", () => {
