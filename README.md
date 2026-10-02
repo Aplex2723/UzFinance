@@ -1,8 +1,10 @@
 # UzFinance
 
-Tracker personal de gastos con tarjetas (American Express, Banamex, Nu). Los gastos entran **automáticamente** desde un Atajo de iPhone (disparador *Transacción* de Wallet / Apple Pay) y se consultan en un dashboard web. UI en español, moneda MXN, tema oscuro, pensada para usarse desde el iPhone.
+Tracker personal de gastos con tarjetas (American Express, Banamex, Nu). Los gastos entran **automáticamente** desde un Atajo de iPhone (disparador *Wallet* —antes *Transacción*— de Apple Pay) y se consultan en un dashboard web. UI en español, moneda MXN, tema oscuro, pensada para usarse desde el iPhone.
 
 ![Dashboard](docs/screenshots/dashboard-desktop.png)
+
+> **Resumen operativo, pruebas, Gmail y Wallet en una sola página: [docs/GUIA.md](docs/GUIA.md).** Incluye ingreso mensual, insights (comparación con meses anteriores, promedio por día, proyección), tarjetas ilustradas y la app instalable en el celular.
 
 - [Arquitectura](#arquitectura)
 - [Seguridad](#seguridad)
@@ -54,7 +56,7 @@ Tracker personal de gastos con tarjetas (American Express, Banamex, Nu). Los gas
 
 | Control | Cómo |
 |---|---|
-| Todo exige sesión | Easy Auth con Entra ID; **únicas excepciones** `/api/ingest` y `/api/ingest/email` (`excludedPaths`), cada una con su propio token |
+| Todo exige sesión | Easy Auth con Entra ID; **únicas excepciones** `/api/ingest` y `/api/ingest/email` (`excludedPaths`), cada una con su propio token, más los estáticos públicos sin datos `/manifest.webmanifest` y `/icons/*` (necesarios para instalar la app en el celular) |
 | Defensa en profundidad | El servidor valida `X-MS-CLIENT-PRINCIPAL` y compara el correo con `ALLOWED_EMAIL`. Match robusto del UPN de invitado (`usuario_gmail.com#EXT#@tenant`) además del claim `email`; y opcionalmente `tid` |
 | Solo tu cuenta | Asignación de usuario obligatoria en la enterprise app + `allowedPrincipals` (tu object id) + `WEBSITE_AUTH_AAD_ALLOWED_TENANTS` + allowlist en código |
 | Login sin secreto | Easy Auth usa una *federated identity credential* sobre una Managed Identity (no hay client secret) |

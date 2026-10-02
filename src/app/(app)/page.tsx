@@ -5,7 +5,11 @@ import { Heatmap } from "@/components/charts/Heatmap";
 import { SankeyChart } from "@/components/charts/SankeyChart";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { WeekdayBars } from "@/components/charts/WeekdayBars";
+import { CardArt } from "@/components/CardArt";
 import { DashboardActions } from "@/components/DashboardActions";
+import { InsightList } from "@/components/insights/InsightList";
+import { KpiTile } from "@/components/insights/Kpi";
+import { PaceBar } from "@/components/insights/PaceBar";
 import { MonthNav } from "@/components/MonthNav";
 import { RecentActivity } from "@/components/RecentActivity";
 import { ReviewPanel } from "@/components/ReviewPanel";
@@ -14,6 +18,7 @@ import { Panel } from "@/components/ui/Panel";
 import { requirePageUser } from "@/lib/auth/page";
 import { listCards } from "@/lib/repo/cards";
 import { listUnparsed } from "@/lib/repo/emails";
+import { getInsights } from "@/lib/repo/insights";
 import { ISSUER_LABEL, monthLabel } from "@/lib/format";
 import { formatMXN } from "@/lib/money";
 import { getCardSummaries, getCumulative, getHeatmap, getOverview, getSankey, getWeekdayTotals } from "@/lib/repo/stats";
@@ -26,7 +31,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const raw = typeof sp.month === "string" ? sp.month : undefined;
   const month = raw && MONTH_RE.test(raw) ? raw : currentMonth();
 
-  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments] = await Promise.all([
+  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins] = await Promise.all([
     getOverview(month),
     getCardSummaries(month),
     getCumulative(month),
@@ -37,6 +42,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     listCards(false),
     listUnparsed(),
     listTransactions({ kind: "card_payment", month, limit: 20 }),
+    getInsights(month),
   ]);
   const paymentsTotal = payments.rows.reduce((a, r) => a + r.amount_cents, 0);
 
@@ -64,28 +70,61 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <DashboardActions />
       </section>
 
-      <section aria-label="Tarjetas" className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
-        {cards.map((c) => (
-          <article key={c.id} className="glass flex min-w-[210px] flex-col justify-between gap-2 p-4" aria-label={c.name}>
-            <header className="flex items-center gap-2 text-[12px]">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} aria-hidden />
-              <span className="truncate font-medium">{c.name}</span>
-              {c.last4 && <span className="ml-auto text-faint">•••• {c.last4}</span>}
-            </header>
-            <div className="flex items-end justify-between gap-2">
-              <div>
-                <p className="num text-2xl font-semibold">{formatMXN(c.cents, { compact: true })}</p>
-                <div className="mt-1"><Delta pct={c.deltaPct} label="sin base" /></div>
+      <PaceBar i={ins} />
+
+      <section aria-label="Cifras clave" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiTile
+          label="Promedio por día"
+          value={formatMXN(ins.avgPerDay, { compact: true })}
+          sub={ins.prevAvgPerDay > 0 ? <span className="flex flex-wrap items-center gap-1"><Delta pct={((ins.avgPerDay - ins.prevAvgPerDay) / ins.prevAvgPerDay) * 100} label="" /> vs {formatMXN(ins.prevAvgPerDay, { compact: true })} el mes pasado</span> : "sin mes previo"}
+          testId="avg-per-day"
+        />
+        <KpiTile
+          label={ins.isCurrent ? "Proyección a fin de mes" : "Cierre del mes"}
+          value={formatMXN(ins.projected, { compact: true })}
+          tone={ins.income > 0 && ins.projected > ins.income ? "bad" : "default"}
+          sub={ins.projectedPct !== null ? `${ins.projectedPct.toFixed(0)}% de tu ingreso` : "configura tu ingreso"}
+          testId="projection"
+        />
+        <KpiTile
+          label={ins.saved >= 0 ? "Ahorro del mes" : "Déficit del mes"}
+          value={formatMXN(Math.abs(ins.saved), { compact: true })}
+          tone={ins.income > 0 ? (ins.saved >= 0 ? "good" : "bad") : "default"}
+          sub={ins.savedPct !== null ? `${ins.savedPct.toFixed(0)}% de tu ingreso${ins.isCurrent ? " hasta hoy" : ""}` : undefined}
+          testId="saved"
+        />
+        <KpiTile
+          label="Gasto promedio por compra"
+          value={formatMXN(ins.avgTicket, { compact: true })}
+          sub={`${ins.count} compras · ${ins.noSpendDays} día${ins.noSpendDays === 1 ? "" : "s"} sin gasto`}
+        />
+      </section>
+
+      <section aria-label="Tarjetas" className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
+        {cards.map((c) => {
+          const full = allCards.find((x) => x.id === c.id);
+          return (
+            <article key={c.id} className="glass flex w-[236px] shrink-0 snap-start flex-col gap-3 p-3 sm:w-auto" aria-label={c.name}>
+              <CardArt card={{ name: c.name, issuer: c.issuer, last4: c.last4, color: c.color, art: full?.art ?? null }} />
+              <div className="flex items-end justify-between gap-2 px-1">
+                <div>
+                  <p className="num text-2xl font-semibold">{formatMXN(c.cents, { compact: true })}</p>
+                  <div className="mt-1"><Delta pct={c.deltaPct} label="sin base" /></div>
+                </div>
+                <div className="w-[88px]"><Sparkline values={c.spark} label={c.name} color={c.deltaPct !== null && c.deltaPct > 0 ? "#ef4444" : "#22c55e"} /></div>
               </div>
-              <div className="w-[88px]"><Sparkline values={c.spark} label={c.name} color={c.deltaPct !== null && c.deltaPct > 0 ? "#ef4444" : "#22c55e"} /></div>
-            </div>
-          </article>
-        ))}
-        <Link href="/tarjetas?new=1" className="flex min-h-[112px] min-w-[210px] flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-line text-center text-muted transition-colors hover:border-white/25 hover:text-fg">
+            </article>
+          );
+        })}
+        <Link href="/tarjetas?new=1" className="flex min-h-[112px] w-[200px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-line text-center text-muted transition-colors hover:border-white/25 hover:text-fg sm:w-auto">
           <Plus size={16} aria-hidden />
           <span className="max-w-[170px] text-[12px]">Agregar otra tarjeta a tu cuenta</span>
         </Link>
       </section>
+
+      <Panel title="Insights del mes" action={<Link href={`/analitica${month === currentMonth() ? "" : `?month=${month}`}`} className="btn !h-7 !px-2.5 text-[11px]">Ver análisis</Link>}>
+        <InsightList messages={ins.messages.slice(0, 4)} />
+      </Panel>
 
       <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <Panel title="Gasto acumulado: este mes vs. anterior">

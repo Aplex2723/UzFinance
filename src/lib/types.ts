@@ -1,3 +1,4 @@
+export type CardArtId = "amex-platinum" | "banamex-explora" | "banamex-clasica" | "banamex-debito" | "nu" | "generic";
 export type Issuer = "amex" | "banamex" | "nu" | "other";
 export type Source = "shortcut" | "email" | "statement" | "manual";
 
@@ -8,6 +9,8 @@ export type Card = {
   last4: string | null;
   aliases: string | null;
   color: string;
+  /** Diseño visual; null = automático según emisor y nombre. */
+  art: CardArtId | null;
   active: boolean;
   /** Creada automáticamente desde un correo: pendiente de que le pongas nombre. */
   needs_name: boolean;

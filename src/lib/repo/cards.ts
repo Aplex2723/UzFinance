@@ -4,7 +4,7 @@ import type { BankCardRef } from "@/lib/sources/banamex-email";
 import { cardKey } from "@/lib/sources/banamex-email";
 import type { Card } from "@/lib/types";
 
-const COLS = "id, name, issuer, last4, aliases, color, active, needs_name";
+const COLS = "id, name, issuer, last4, aliases, color, art, active, needs_name";
 type Row = Omit<Card, "active" | "needs_name"> & { active: boolean | number; needs_name: boolean | number };
 const map = (r: Row): Card => ({ ...r, active: !!r.active, needs_name: !!r.needs_name });
 
@@ -13,15 +13,15 @@ export async function listCards(includeInactive = false): Promise<Card[]> {
   return rows.map(map);
 }
 
-export type CardInput = Pick<Card, "name" | "issuer" | "last4" | "aliases" | "color"> & { active?: boolean };
+export type CardInput = Pick<Card, "name" | "issuer" | "last4" | "aliases" | "color"> & { art?: Card["art"]; active?: boolean };
 
 export async function createCard(c: CardInput): Promise<Card> {
   try {
     const rows = await query<Row>(
-      `INSERT dbo.cards (name, issuer, last4, aliases, color, active)
-       OUTPUT INSERTED.id, INSERTED.name, INSERTED.issuer, INSERTED.last4, INSERTED.aliases, INSERTED.color, INSERTED.active, INSERTED.needs_name
-       VALUES (@name, @issuer, @last4, @aliases, @color, @active)`,
-      { name: t.str(c.name), issuer: t.varchar(c.issuer), last4: t.char(c.last4), aliases: t.str(c.aliases), color: t.varchar(c.color), active: t.bit(c.active ?? true) },
+      `INSERT dbo.cards (name, issuer, last4, aliases, color, art, active)
+       OUTPUT INSERTED.id, INSERTED.name, INSERTED.issuer, INSERTED.last4, INSERTED.aliases, INSERTED.color, INSERTED.art, INSERTED.active, INSERTED.needs_name
+       VALUES (@name, @issuer, @last4, @aliases, @color, @art, @active)`,
+      { name: t.str(c.name), issuer: t.varchar(c.issuer), last4: t.char(c.last4), aliases: t.str(c.aliases), color: t.varchar(c.color), art: t.varchar(c.art ?? null), active: t.bit(c.active ?? true) },
     );
     return map(rows[0]);
   } catch (e) {
@@ -33,10 +33,10 @@ export async function createCard(c: CardInput): Promise<Card> {
 export async function updateCard(id: number, c: CardInput): Promise<Card | null> {
   try {
     const rows = await query<Row>(
-      `UPDATE dbo.cards SET name=@name, issuer=@issuer, last4=@last4, aliases=@aliases, color=@color, active=@active, needs_name=0
-       OUTPUT INSERTED.id, INSERTED.name, INSERTED.issuer, INSERTED.last4, INSERTED.aliases, INSERTED.color, INSERTED.active, INSERTED.needs_name
+      `UPDATE dbo.cards SET name=@name, issuer=@issuer, last4=@last4, aliases=@aliases, color=@color, art=@art, active=@active, needs_name=0
+       OUTPUT INSERTED.id, INSERTED.name, INSERTED.issuer, INSERTED.last4, INSERTED.aliases, INSERTED.color, INSERTED.art, INSERTED.active, INSERTED.needs_name
        WHERE id=@id`,
-      { id: t.int(id), name: t.str(c.name), issuer: t.varchar(c.issuer), last4: t.char(c.last4), aliases: t.str(c.aliases), color: t.varchar(c.color), active: t.bit(c.active ?? true) },
+      { id: t.int(id), name: t.str(c.name), issuer: t.varchar(c.issuer), last4: t.char(c.last4), aliases: t.str(c.aliases), color: t.varchar(c.color), art: t.varchar(c.art ?? null), active: t.bit(c.active ?? true) },
     );
     return rows[0] ? map(rows[0]) : null;
   } catch (e) {

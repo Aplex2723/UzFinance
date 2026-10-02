@@ -243,12 +243,13 @@ export async function categorizeUncategorized(): Promise<{ updated: number; rema
  * Una sola consulta agregada: suficiente para datos personales.
  */
 export async function getChangeRevision(): Promise<string> {
-  const r = await query<{ n: number; m: number; h: number; u: number; c: number }>(
+  const r = await query<{ n: number; m: number; h: number; u: number; c: number; i: number | null }>(
     `SELECT COUNT_BIG(*) AS n, CAST(ISNULL(MAX(id), 0) AS float) AS m,
             CAST(ISNULL(CHECKSUM_AGG(CHECKSUM(id, amount_cents, category_id, card_id, occurred_at, merchant_raw, kind, sources)), 0) AS float) AS h,
             (SELECT COUNT_BIG(*) FROM dbo.unparsed_emails) AS u,
-            (SELECT COUNT_BIG(*) FROM dbo.cards WHERE needs_name = 1) AS c
+            (SELECT COUNT_BIG(*) FROM dbo.cards WHERE needs_name = 1) AS c,
+            (SELECT CHECKSUM_AGG(CHECKSUM(value)) FROM dbo.app_settings) AS i
      FROM dbo.transactions`,
   );
-  return `${r[0].n}-${r[0].m}-${r[0].h}-${r[0].u}-${r[0].c}`;
+  return `${r[0].n}-${r[0].m}-${r[0].h}-${r[0].u}-${r[0].c}-${r[0].i ?? 0}`;
 }

@@ -23,7 +23,13 @@
 
 html {
   background: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
+/* App instalada: sin rebote de scroll y márgenes seguros (notch / barra de inicio). */
+body { overscroll-behavior-y: none; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+a, button { touch-action: manipulation; }
 
 body {
   min-height: 100dvh;

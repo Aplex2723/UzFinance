@@ -3,8 +3,11 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/client";
+import { CARD_ART_IDS, CARD_ART_LABEL } from "@/lib/card-art";
 import { ISSUER_COLOR, ISSUER_LABEL } from "@/lib/format";
 import type { Card } from "@/lib/types";
+import type { CardArtId } from "@/lib/types";
+import { CardArt } from "./CardArt";
 import { Dialog } from "./ui/Dialog";
 
 function CardForm({ card, onDone }: { card: Card | null; onDone: () => void }) {
@@ -18,7 +21,7 @@ function CardForm({ card, onDone }: { card: Card | null; onDone: () => void }) {
     const body = {
       name: String(f.get("name")), issuer: String(f.get("issuer")),
       last4: String(f.get("last4") ?? "") || null, aliases: String(f.get("aliases") ?? "") || null,
-      color: String(f.get("color")), active: f.get("active") === "on",
+      color: String(f.get("color")), art: String(f.get("art") ?? "") || null, active: f.get("active") === "on",
     };
     setBusy(true); setError(null);
     const r = card ? await apiFetch(`/api/cards/${card.id}`, "PUT", body) : await apiFetch("/api/cards", "POST", body);
@@ -36,6 +39,8 @@ function CardForm({ card, onDone }: { card: Card | null; onDone: () => void }) {
         <div><label className="label" htmlFor="c-last4">Últimos dígitos</label><input id="c-last4" name="last4" pattern="\d{3,4}" inputMode="numeric" maxLength={4} defaultValue={card?.last4 ?? ""} className="field" /></div>
       </div>
       <div><label className="label" htmlFor="c-alias">Alias (separados por coma, como los manda Wallet)</label><input id="c-alias" name="aliases" maxLength={300} defaultValue={card?.aliases ?? ""} className="field" placeholder="Ej. Nu, Nu Bank, NuBank" /></div>
+      <div><label className="label" htmlFor="c-art">Diseño de la tarjeta</label>
+        <select id="c-art" name="art" defaultValue={card?.art ?? ""} className="field"><option value="">Automático (según emisor y nombre)</option>{CARD_ART_IDS.map((a) => <option key={a} value={a}>{CARD_ART_LABEL[a as CardArtId]}</option>)}</select></div>
       <div className="grid grid-cols-2 items-end gap-3">
         <div><label className="label" htmlFor="c-color">Color</label><input id="c-color" name="color" type="color" defaultValue={card?.color ?? "#ff4d1c"} className="field !p-1" /></div>
         {card && <label className="flex h-[38px] items-center gap-2"><input type="checkbox" name="active" defaultChecked={card.active} /> Activa</label>}
@@ -68,6 +73,7 @@ export function CardsManager({ cards }: { cards: Card[] }) {
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((c) => (
           <li key={c.id} className={`glass p-4 ${c.active ? "" : "opacity-50"} ${c.needs_name ? "border border-[#f59e0b]/60" : ""}`} data-testid={c.needs_name ? "card-unnamed" : undefined}>
+            <div className="mx-auto mb-3 w-full max-w-[260px]"><CardArt card={c} /></div>
             <div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ background: c.color }} aria-hidden /><b className="truncate">{c.name}</b>{!c.active && <span className="text-[10px] text-faint">inactiva</span>}</div>
             {c.needs_name && <p className="mt-1 text-[11px] text-[#f59e0b]">Sin nombrar: llegó por correo del banco. Edítala para ponerle nombre y alias de Wallet.</p>}
             <p className="mt-1 text-muted">{ISSUER_LABEL[c.issuer]}{c.last4 ? ` · •••• ${c.last4}` : ""}</p>

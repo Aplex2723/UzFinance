@@ -1,5 +1,5 @@
 "use client";
-import { Menu } from "lucide-react";
+import { BarChart3, CreditCard, Home, Menu, MoreHorizontal, Receipt, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -46,6 +46,40 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+const TABS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/", label: "Inicio", icon: Home },
+  { href: "/transacciones", label: "Gastos", icon: Receipt },
+  { href: "/analitica", label: "Analítica", icon: BarChart3 },
+  { href: "/tarjetas", label: "Tarjetas", icon: CreditCard },
+];
+
+/** Barra inferior para el celular: lo más usado a un pulgar de distancia. */
+function BottomNav({ onMore }: { onMore: () => void }) {
+  const path = usePathname();
+  const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+  const item = "flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] transition-colors";
+  return (
+    <nav aria-label="Navegación rápida" className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/90 backdrop-blur-xl lg:hidden" data-testid="bottom-nav">
+      <ul className="mx-auto flex max-w-[520px] items-stretch px-1">
+        {TABS.map(({ href, label, icon: Icon }) => (
+          <li key={href} className="flex flex-1">
+            <Link href={href} aria-current={active(href) ? "page" : undefined} className={`${item} ${active(href) ? "text-accent-2" : "text-muted"}`}>
+              <Icon size={20} aria-hidden />
+              {label}
+            </Link>
+          </li>
+        ))}
+        <li className="flex flex-1">
+          <button type="button" onClick={onMore} className={`${item} text-muted`} aria-label="Más opciones">
+            <MoreHorizontal size={20} aria-hidden />
+            Más
+          </button>
+        </li>
+      </ul>
+    </nav>
+  );
+}
+
 export function AppShell({ children, userEmail }: { children: ReactNode; userEmail: string }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
@@ -85,8 +119,9 @@ export function AppShell({ children, userEmail }: { children: ReactNode; userEma
             <CommandPalette />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1280px] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 lg:pb-5">{children}</main>
       </div>
+      <BottomNav onMore={() => setOpen(true)} />
     </div>
   );
 }

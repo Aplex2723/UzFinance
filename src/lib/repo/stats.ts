@@ -9,7 +9,7 @@ export function cutoffDay(month: string, now = new Date()): number {
   return month === currentMonth(now) ? Number(localDate(now).slice(8, 10)) : daysInMonth(month);
 }
 
-async function dailyTotals(from: string, to: string, cardId?: number): Promise<Map<string, number>> {
+export async function dailyTotals(from: string, to: string, cardId?: number): Promise<Map<string, number>> {
   const rows = await query<{ d: string; cents: number }>(
     `SELECT CONVERT(char(10), occurred_date, 23) AS d, CAST(SUM(amount_cents) AS float) AS cents
      FROM dbo.transactions WHERE kind = 'expense' AND occurred_date BETWEEN @from AND @to ${cardId ? "AND card_id=@card" : ""}

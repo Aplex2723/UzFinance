@@ -166,7 +166,7 @@ test.describe("páginas y flujos", () => {
     const card = `Tarjeta E2E ${uid()}`;
     await dlg.getByLabel("Nombre").fill(card);
     await dlg.getByRole("button", { name: "Guardar" }).click();
-    await expect(page.getByText(card)).toBeVisible();
+    await expect(page.locator("b", { hasText: card })).toBeVisible();
     await page.goto("/categorias");
     const cat = `Categoría E2E ${uid()}`;
     await page.getByRole("form", { name: "Nueva categoría" }).getByLabel("Nombre").fill(cat);

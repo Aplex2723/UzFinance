@@ -1,14 +1,17 @@
 import { headers } from "next/headers";
+import { IncomeEditor } from "@/components/IncomeEditor";
 import { PayeesManager } from "@/components/PayeesManager";
 import { listPayees } from "@/lib/repo/payees";
 import { PageTitle, Panel } from "@/components/ui/Panel";
+import { formatMXN } from "@/lib/money";
+import { getMonthlyIncome } from "@/lib/repo/settings";
 import { requirePageUser } from "@/lib/auth/page";
 import { getEnv } from "@/lib/env";
 
 export default async function Page() {
   const user = await requirePageUser();
   const env = getEnv();
-  const payees = await listPayees();
+  const [payees, income] = await Promise.all([listPayees(), getMonthlyIncome()]);
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = host.startsWith("localhost") ? "http" : "https";
@@ -22,6 +25,18 @@ export default async function Page() {
     <>
       <PageTitle title="Configuración" />
       <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Mi ingreso mensual">
+          <p className="num text-3xl font-semibold" data-testid="income-value">{income > 0 ? formatMXN(income) : "Sin configurar"}</p>
+          <p className="mb-3 mt-1 text-muted">Con esto se calcula qué porcentaje de tu ingreso gastas, cuánto ahorras y la proyección de cada mes.</p>
+          <IncomeEditor cents={income} variant="button" />
+        </Panel>
+        <Panel title="Instalar en tu celular">
+          <ol className="list-decimal space-y-1.5 pl-5 text-muted">
+            <li><b className="text-fg">iPhone:</b> abre esta página en Safari → Compartir → <b className="text-fg">Añadir a pantalla de inicio</b>.</li>
+            <li><b className="text-fg">Android:</b> Chrome → menú ⋮ → <b className="text-fg">Instalar app</b>.</li>
+          </ol>
+          <p className="mt-3 text-[11px] text-faint">Se abre a pantalla completa con su propio ícono. Los datos siempre se leen en vivo; no se guardan en el dispositivo.</p>
+        </Panel>
         <Panel title="Estado">
           <dl className="divide-y divide-line">
             {rows.map(([k, v]) => <div key={k} className="flex justify-between gap-4 py-2.5"><dt className="text-muted">{k}</dt><dd className="truncate text-right">{v}</dd></div>)}

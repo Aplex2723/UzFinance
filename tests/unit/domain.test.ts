@@ -48,7 +48,7 @@ describe("matchRule", () => {
 });
 
 describe("matchCard", () => {
-  const card = (id: number, name: string, last4: string | null, aliases: string | null): Card => ({ id, name, issuer: "banamex", last4, aliases, color: "#fff", active: true, needs_name: false });
+  const card = (id: number, name: string, last4: string | null, aliases: string | null): Card => ({ id, name, issuer: "banamex", last4, aliases, color: "#fff", art: null, active: true, needs_name: false });
   const cards = [card(1, "Banamex Oro", "4412", "Oro Visa, Citibanamex Oro"), card(2, "American Express Platinum", "1005", "Amex"), card(3, "Banamex Costco", "7788", null)];
   it("por nombre, alias (sin acentos/mayúsculas) y últimos 4", () => {
     expect(matchCard(cards, "banamex oro")?.id).toBe(1);

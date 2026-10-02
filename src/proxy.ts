@@ -3,6 +3,7 @@ import { authenticate } from "@/lib/auth/session";
 
 /**
  * Defensa en profundidad + CSP con nonce.
+ *  0) Excluidos del matcher: estáticos públicos (íconos y manifest) que el navegador pide sin cookies.
  *  1) Valida la sesión de Easy Auth (X-MS-CLIENT-PRINCIPAL + allowlist) para todo
  *     salvo /api/ingest y /api/ingest/email, que usan su propio token Bearer.
  *  2) Cada handler y página vuelve a validar: este archivo no es la única barrera.
@@ -49,5 +50,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [{ source: "/((?!_next/static|_next/image|favicon.ico|icon.svg).*)", missing: [{ type: "header", key: "next-router-prefetch" }, { type: "header", key: "purpose", value: "prefetch" }] }],
+  matcher: [{ source: "/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|icons/).*)", missing: [{ type: "header", key: "next-router-prefetch" }, { type: "header", key: "purpose", value: "prefetch" }] }],
 };

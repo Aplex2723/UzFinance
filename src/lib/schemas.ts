@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseAmountToCents } from "@/lib/money";
+import { CARD_ART_IDS } from "@/lib/card-art";
 import { MONTH_RE } from "@/lib/time";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/, "color hex #RRGGBB");
@@ -14,6 +15,7 @@ export const cardSchema = z
     last4,
     aliases: optText(300),
     color: color.default("#ff4d1c"),
+    art: z.enum(CARD_ART_IDS).nullable().optional().transform((v) => v ?? null),
     active: z.boolean().optional(),
   })
   .strict();
