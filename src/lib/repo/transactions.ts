@@ -97,6 +97,9 @@ export async function ingestTransaction(
     if (probable.length) return { status: "duplicate", cardMatched: matched };
   }
 
+  // Si la tarjeta no se reconoce, se guarda el texto recibido para poder crear el alias correcto.
+  const notes = matched ? raw.notes ?? null : [`Tarjeta sin reconocer: "${raw.cardRef}"`, raw.notes].filter(Boolean).join(" · ").slice(0, 500);
+
   const explicit = raw.categoryName ? deps.categoryIdsByName?.get(raw.categoryName.toLowerCase()) ?? null : null;
   const categoryId = explicit ?? (await deps.categorizer.categorize({ merchantRaw: raw.merchant, merchantNormalized, amountCents: raw.amountCents }));
 
@@ -108,7 +111,7 @@ export async function ingestTransaction(
       {
         at: t.dt(raw.occurredAt), date: t.date(occurredDate), amt: t.big(raw.amountCents),
         raw: t.str(raw.merchant), norm: t.str(merchantNormalized), card: t.int(card.id), cat: t.int(categoryId),
-        src: t.varchar(source), hash: t.char(hash), notes: t.str(raw.notes ?? null),
+        src: t.varchar(source), hash: t.char(hash), notes: t.str(notes),
       },
     );
     return { status: "inserted", id: Number(r[0].id), cardMatched: matched, categoryId };

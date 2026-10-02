@@ -140,6 +140,11 @@ describe("comportamiento del Atajo", () => {
     const r = await query<{ name: string }>("SELECT c.name FROM dbo.transactions t JOIN dbo.cards c ON c.id=t.card_id");
     expect(r[0].name).toBe("Sin asignar");
   });
+  it("si la tarjeta no se reconoce, anota el texto recibido para crear el alias", async () => {
+    await post({ ...payload, card: "Nu México", notes: "viaje" }, auth);
+    const r = await query<{ notes: string }>("SELECT notes FROM dbo.transactions");
+    expect(r[0].notes).toBe('Tarjeta sin reconocer: "Nu México" · viaje');
+  });
   it("reconoce la tarjeta por alias y por últimos 4", async () => {
     expect((await (await post({ ...payload, card: "oro visa" }, auth)).json()).cardMatched).toBe(true);
     expect((await (await post({ ...payload, merchant: "OTRO", card: "•••• 4412" }, auth)).json()).cardMatched).toBe(true);
