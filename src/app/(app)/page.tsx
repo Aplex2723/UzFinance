@@ -45,7 +45,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           <Delta pct={overview.deltaPct} label="sin mes previo" />
         </div>
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
-          {overview.byIssuer.filter((i) => i.issuer !== "other" || i.cents !== 0).map((i) => (
+          {overview.byIssuer.filter((i) => i.issuer === "amex" || i.issuer === "banamex" || i.cents !== 0 || i.prevCents !== 0).map((i) => (
             <span key={i.issuer} className="inline-flex items-center gap-1.5">
               {ISSUER_LABEL[i.issuer]}: <b className="num font-medium text-fg">{formatMXN(i.cents, { compact: true })}</b>
               <Delta pct={i.prevCents > 0 ? ((i.cents - i.prevCents) / i.prevCents) * 100 : null} label="" />

@@ -200,3 +200,16 @@ export async function categorizeUncategorized(): Promise<{ updated: number; rema
   }
   return { updated, remaining: rows.length - updated };
 }
+
+/**
+ * Huella de la tabla de movimientos (altas, ediciones y bajas cambian el valor).
+ * Una sola consulta agregada: suficiente para datos personales.
+ */
+export async function getChangeRevision(): Promise<string> {
+  const r = await query<{ n: number; m: number; h: number }>(
+    `SELECT COUNT_BIG(*) AS n, CAST(ISNULL(MAX(id), 0) AS float) AS m,
+            CAST(ISNULL(CHECKSUM_AGG(CHECKSUM(id, amount_cents, category_id, card_id, occurred_at, merchant_raw)), 0) AS float) AS h
+     FROM dbo.transactions`,
+  );
+  return `${r[0].n}-${r[0].m}-${r[0].h}`;
+}

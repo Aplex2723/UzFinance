@@ -10,7 +10,7 @@ const optText = (max: number) =>
 export const cardSchema = z
   .object({
     name: z.string().trim().min(1).max(60),
-    issuer: z.enum(["amex", "banamex", "other"]),
+    issuer: z.enum(["amex", "banamex", "nu", "other"]),
     last4,
     aliases: optText(300),
     color: color.default("#ff4d1c"),

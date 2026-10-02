@@ -1,6 +1,12 @@
 import { expect, request as pwRequest, test } from "@playwright/test";
 import { E2E_PORT, E2E_TOKEN, principal } from "./env";
 
+declare global {
+  interface Window {
+    __UZ_POLL_MS?: number;
+  }
+}
+
 const BASE = `http://localhost:${E2E_PORT}`;
 /** Sufijo único: los proyectos desktop y mobile comparten la misma base. */
 const uid = () => `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
@@ -105,6 +111,35 @@ test.describe("páginas y flujos", () => {
     await page.goto(`/transacciones?q=${encodeURIComponent(name)}`);
     await expect(page.getByTestId("tx-row")).toHaveCount(1);
     await expect(page.getByTestId("tx-row")).toContainText("$123.45");
+  });
+
+  test("agregar un gasto actualiza el dashboard en el sitio, sin recargar", async ({ page }) => {
+    await page.goto("/");
+    const num = async () => Number((await page.getByTestId("month-total").innerText()).replace(/[^0-9.-]/g, ""));
+    const before = await num();
+    const name = `Vivo e2e ${uid()}`;
+    await page.getByRole("button", { name: "Agregar gasto" }).click();
+    const dlg = page.getByRole("dialog", { name: "Agregar gasto" });
+    await dlg.getByLabel("Comercio").fill(name);
+    await dlg.getByLabel("Monto (MXN)").fill("1000");
+    await dlg.getByRole("button", { name: "Agregar gasto" }).click();
+    await expect(dlg).toBeHidden();
+    await expect.poll(num, { timeout: 5000 }).toBeCloseTo(before + 1000, 2);
+    await expect(page.getByText(name).first()).toBeVisible();
+  });
+
+  test("un gasto que llega desde fuera (Atajo) aparece solo, sin recargar", async ({ page, playwright }) => {
+    await page.addInitScript(() => { window.__UZ_POLL_MS = 700; }); // acorta el intervalo solo en la prueba
+    await page.goto("/");
+    await expect(page.getByTestId("month-total")).toBeVisible();
+    const name = `Atajo en vivo ${uid()}`;
+    const ext = await playwright.request.newContext({ baseURL: BASE, extraHTTPHeaders: {} });
+    const res = await ext.post("/api/ingest", { data: { merchant: name, amount: "77.00", card: "Banamex Oro", date: new Date().toISOString() }, headers: { authorization: `Bearer ${E2E_TOKEN}` } });
+    expect(res.status()).toBe(200);
+    await ext.dispose();
+    await page.mouse.move(10, 10);
+    await page.mouse.down(); await page.mouse.up(); // actividad del usuario: reactiva la consulta
+    await expect(page.getByText(name).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("buscador ⌘K: abre, filtra y navega", async ({ page, isMobile }) => {

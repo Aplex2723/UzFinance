@@ -1,4 +1,4 @@
-export type Issuer = "amex" | "banamex" | "other";
+export type Issuer = "amex" | "banamex" | "nu" | "other";
 export type Source = "shortcut" | "email" | "statement" | "manual";
 
 export type Card = {

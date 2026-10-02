@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { GlobalDialogs } from "@/components/GlobalDialogs";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { requirePageUser } from "@/lib/auth/page";
 import { listCards } from "@/lib/repo/cards";
 import { listCategories } from "@/lib/repo/categories";
@@ -13,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell userEmail={user.email}>
       {children}
       <GlobalDialogs cards={cards} categories={categories} />
+      <LiveRefresh />
     </AppShell>
   );
 }

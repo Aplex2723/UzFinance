@@ -41,7 +41,7 @@ export async function getOverview(month: string, now = new Date()) {
     prevTotal,
     deltaPct: prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : null,
     count: cur.reduce((a, r) => a + N(r.n), 0),
-    byIssuer: (["amex", "banamex", "other"] as Issuer[]).map((issuer) => ({
+    byIssuer: (["amex", "banamex", "nu", "other"] as Issuer[]).map((issuer) => ({
       issuer,
       cents: N(cur.find((r) => r.issuer === issuer)?.cents),
       prevCents: N(prv.find((r) => r.issuer === issuer)?.cents),

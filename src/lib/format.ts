@@ -29,4 +29,7 @@ export function relativeDay(date: string, todayIso: string): string {
   return dayFmt.format(new Date(`${date}T12:00:00Z`)).replace(".", "");
 }
 
-export const ISSUER_LABEL = { amex: "American Express", banamex: "Banamex", other: "Otras" } as const;
+export const ISSUER_LABEL = { amex: "American Express", banamex: "Banamex", nu: "Nu", other: "Otras" } as const;
+
+/** Color sugerido al elegir emisor en una tarjeta nueva. */
+export const ISSUER_COLOR = { amex: "#9ca3af", banamex: "#ef4444", nu: "#8a05be", other: "#6b7280" } as const;

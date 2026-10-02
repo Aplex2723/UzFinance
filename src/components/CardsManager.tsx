@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { apiFetch } from "@/lib/client";
-import { ISSUER_LABEL } from "@/lib/format";
+import { ISSUER_COLOR, ISSUER_LABEL } from "@/lib/format";
 import type { Card } from "@/lib/types";
 import { Dialog } from "./ui/Dialog";
 
@@ -32,10 +32,10 @@ function CardForm({ card, onDone }: { card: Card | null; onDone: () => void }) {
       <div><label className="label" htmlFor="c-name">Nombre</label><input id="c-name" name="name" required maxLength={60} defaultValue={card?.name} className="field" /></div>
       <div className="grid grid-cols-2 gap-3">
         <div><label className="label" htmlFor="c-issuer">Emisor</label>
-          <select id="c-issuer" name="issuer" defaultValue={card?.issuer ?? "banamex"} className="field">{(["amex", "banamex", "other"] as const).map((i) => <option key={i} value={i}>{ISSUER_LABEL[i]}</option>)}</select></div>
+          <select id="c-issuer" name="issuer" defaultValue={card?.issuer ?? "banamex"} className="field" onChange={(e) => { if (!card) { const c = e.currentTarget.form?.elements.namedItem("color") as HTMLInputElement | null; if (c) c.value = ISSUER_COLOR[e.currentTarget.value as keyof typeof ISSUER_COLOR] ?? c.value; } }}>{(["amex", "banamex", "nu", "other"] as const).map((i) => <option key={i} value={i}>{ISSUER_LABEL[i]}</option>)}</select></div>
         <div><label className="label" htmlFor="c-last4">Últimos 4</label><input id="c-last4" name="last4" pattern="\d{4}" inputMode="numeric" maxLength={4} defaultValue={card?.last4 ?? ""} className="field" /></div>
       </div>
-      <div><label className="label" htmlFor="c-alias">Alias (separados por coma, como los manda Wallet)</label><input id="c-alias" name="aliases" maxLength={300} defaultValue={card?.aliases ?? ""} className="field" placeholder="Amex, American Express" /></div>
+      <div><label className="label" htmlFor="c-alias">Alias (separados por coma, como los manda Wallet)</label><input id="c-alias" name="aliases" maxLength={300} defaultValue={card?.aliases ?? ""} className="field" placeholder="Ej. Nu, Nu Bank, NuBank" /></div>
       <div className="grid grid-cols-2 items-end gap-3">
         <div><label className="label" htmlFor="c-color">Color</label><input id="c-color" name="color" type="color" defaultValue={card?.color ?? "#ff4d1c"} className="field !p-1" /></div>
         {card && <label className="flex h-[38px] items-center gap-2"><input type="checkbox" name="active" defaultChecked={card.active} /> Activa</label>}

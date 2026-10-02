@@ -41,6 +41,14 @@ describe("tarjetas", () => {
     expect((await call(delCard as never, "/api/cards/99999", { method: "DELETE" }, { id: "99999" })).status).toBe(404);
     expect((await call(delCard as never, "/api/cards/abc", { method: "DELETE" }, { id: "abc" })).status).toBe(400);
   });
+  it("acepta Nu como emisor y rechaza emisores desconocidos", async () => {
+    const nu = await call(postCard as never, "/api/cards", { body: { name: "Nu Bank", issuer: "nu", last4: "9911", aliases: "Nu, NuBank, Nu México", color: "#8a05be" } });
+    expect(nu.status).toBe(201);
+    expect(nu.body.issuer).toBe("nu");
+    const up = await call(putCard as never, `/api/cards/${nu.body.id}`, { method: "PUT", body: { name: "Nu Bank", issuer: "nu", last4: "9911", aliases: "Nu", color: "#8a05be" } }, { id: String(nu.body.id) });
+    expect(up.status).toBe(200);
+    expect((await call(postCard as never, "/api/cards", { body: { ...card, name: "X", issuer: "mercadopago" } })).status).toBe(400);
+  });
   it("una tarjeta con movimientos se desactiva, no se borra", async () => {
     const c = (await call(postCard as never, "/api/cards", { body: card })).body;
     await call(postTx as never, "/api/transactions", { body: { date: "2026-09-10T12:00:00Z", amount: "10", merchant: "X", card_id: c.id } });
