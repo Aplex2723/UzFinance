@@ -38,7 +38,7 @@ Tracker personal de gastos con tarjetas (American Express, Banamex, Nu). Los gas
                                     ▼
                      Azure SQL Database (serverless, oferta gratuita, solo Entra)
 
- GitHub (main) ─ Actions: lint · typecheck · tests · e2e ─ OIDC (sin secretos) ─▶ deploy ─▶ smoke test
+ GitHub (main) ─ Actions: lint · typecheck · tests ─ OIDC (sin secretos) ─▶ deploy ─▶ smoke test
 ```
 
 | Capa | Detalle |
@@ -139,7 +139,7 @@ npm run test:integration   # API + SQL Server real (requiere db:up); base aparte
 npm run test:e2e           # build de producción + Playwright (desktop y mobile); base `uzfinance_e2e`
 ```
 
-El e2e corre sobre el **build de producción** con `AUTH_MODE=easyauth` y el header de Easy Auth simulado, así se ejercita el mismo camino de seguridad que en Azure. Las capturas de diseño se regeneran en `docs/screenshots/`.
+El e2e (solo local; ya no corre en CI para que el despliegue sea rápido) corre sobre el **build de producción** con `AUTH_MODE=easyauth` y el header de Easy Auth simulado, así se ejercita el mismo camino de seguridad que en Azure. Las capturas de diseño se regeneran en `docs/screenshots/`.
 
 CI (`.github/workflows/ci.yml`) corre todo esto con un SQL Server efímero y password generado al vuelo.
 

@@ -55,7 +55,7 @@ npm run dev              # http://localhost:3000, AUTH_MODE=dev (solo local)
 |---|---|---|
 | Tipos y lint | `npm run typecheck && npm run lint` | |
 | Unitarias + integración | `npm test` | Integración usa la base local y la limpia; ~340 pruebas |
-| E2E (desktop + celular) | `npm run test:e2e` | Compila, usa la base propia `uzfinance_e2e` (puerto 3200); ~56 pruebas |
+| E2E (desktop + celular) | `npm run test:e2e` | **Solo local** (se quitaron del CI por lentos). Compila, usa la base propia `uzfinance_e2e` (puerto 3200); ~78 pruebas |
 | Humo contra un despliegue | `scripts/smoke.sh <url> [INGEST_TOKEN] [EMAIL_TOKEN]` | 401/200 de los endpoints |
 | Probar un correo sin guardar | `POST /api/ingest/email` con `X-Dry-Run: 1` | Devuelve `parsed/ignored/unparsed` + motivo |
 
