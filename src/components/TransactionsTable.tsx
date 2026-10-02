@@ -32,8 +32,10 @@ export function TransactionsTable({ rows }: { rows: Transaction[] }) {
             <div className="min-w-0 flex-1 basis-[180px]">
               <p className="truncate font-medium">{r.merchant_raw}</p>
               <p className="truncate text-[11px] text-muted">{r.account_ref ? `Domiciliación ···${r.account_ref}` : r.card_name} · {r.sources.split(",").join(" + ")}{r.notes ? ` · ${r.notes}` : ""}</p>
-              {(r.unconfirmed || r.is_recurring) && (
+              {(r.unconfirmed || r.is_recurring || r.plan_id !== null || r.category_source === "jev") && (
                 <p className="mt-0.5 flex flex-wrap gap-1.5 text-[10px]">
+                  {r.plan_id !== null && <span className="rounded-full border border-accent/50 px-2 py-0.5 text-accent-2" data-testid="msi-badge">A meses (MSI)</span>}
+                  {r.category_source === "jev" && <span className="rounded-full border border-[#60a5fa]/40 px-2 py-0.5 text-[#60a5fa]" title="Categoría sugerida por IA (Jev). Si no es la correcta, edítala: la próxima vez se respeta." data-testid="ai-badge">IA{r.category_confidence !== null ? ` ${Math.round(r.category_confidence * 100)}%` : ""}</span>}
                   {r.unconfirmed && <span className="rounded-full border border-[#f59e0b]/50 px-2 py-0.5 text-[#f59e0b]" data-testid="unconfirmed">Sin confirmación bancaria</span>}
                   {r.is_recurring && <span className="rounded-full border border-line px-2 py-0.5 text-muted">Recurrente</span>}
                 </p>

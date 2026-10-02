@@ -73,6 +73,22 @@ function Background({ art, color, id }: { art: CardArtId; color: string; id: str
           <Chip />
         </>
       );
+    case "banamex-costco":
+      return (
+        <>
+          <defs>
+            <linearGradient id={`${id}g`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#13264a" /><stop offset=".55" stopColor="#0b1730" /><stop offset="1" stopColor="#060c1c" /></linearGradient>
+          </defs>
+          <rect width="320" height="202" fill={`url(#${id}g)`} />
+          <g stroke="#6f93d6" strokeOpacity=".18" fill="none" strokeWidth="1">
+            {Array.from({ length: 7 }, (_, i) => <path key={i} d={`M-10 ${60 + i * 24}C100 ${20 + i * 14} 220 ${170 + i * 8} 340 ${50 + i * 22}`} />)}
+          </g>
+          <rect x="302" y="14" width="3" height="22" fill="#e31837" />
+          <text x="26" y="40" fontSize="15" fontWeight="700" fill="#fff" fontFamily="Arial, sans-serif" letterSpacing="1">banamex</text>
+          <text x="292" y="44" textAnchor="end" fontSize="20" fontWeight="800" fontStyle="italic" fill="#fff" fontFamily="Arial, sans-serif" letterSpacing="1" fillOpacity=".92">VISA</text>
+          <Chip />
+        </>
+      );
     case "banamex-debito":
       return (
         <>

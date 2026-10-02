@@ -1,11 +1,12 @@
 import type { CardArtId, Issuer } from "./types";
 
-export const CARD_ART_IDS = ["amex-platinum", "banamex-explora", "banamex-clasica", "banamex-debito", "nu", "generic"] as const;
+export const CARD_ART_IDS = ["amex-platinum", "banamex-explora", "banamex-clasica", "banamex-costco", "banamex-debito", "nu", "generic"] as const;
 
 export const CARD_ART_LABEL: Record<CardArtId, string> = {
   "amex-platinum": "American Express Platinum",
   "banamex-explora": "Banamex Explora",
   "banamex-clasica": "Banamex Clásica",
+  "banamex-costco": "Banamex Costco",
   "banamex-debito": "Banamex Débito",
   nu: "Nu",
   generic: "Genérica (usa el color)",
@@ -21,6 +22,7 @@ export function resolveArt(card: { art: CardArtId | null; issuer: Issuer; name: 
   if (card.issuer === "nu") return "nu";
   if (card.issuer === "banamex") {
     if (n.includes("explora")) return "banamex-explora";
+    if (n.includes("costco")) return "banamex-costco";
     if (n.includes("debito")) return "banamex-debito";
     if (n.includes("clasica")) return "banamex-clasica";
   }

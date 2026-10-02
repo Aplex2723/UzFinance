@@ -47,7 +47,8 @@ Tracker personal de gastos con tarjetas (American Express, Banamex, Nu). Los gas
 | Datos | SQL Server (Azure SQL en prod, SQL Server 2022 en docker local → mismo motor); consultas parametrizadas; montos en **centavos enteros**; reembolsos = monto negativo |
 | Ingesta | `POST /api/ingest` → valida (zod estricto) → resuelve tarjeta (nombre, alias o últimos 4) → categoriza (reglas) → deduplica por hash |
 | Fuentes | Interfaz `TransactionSource`: `shortcut` y `statement` (CSV genérico) implementadas. Correos de Banamex: ver [Ingesta de correos de Banamex](#ingesta-de-correos-de-banamex) |
-| Categorización | Interfaz `Categorizer`: reglas por defecto; `CATEGORIZER=llm` enchufa un LLM (hoy stub que delega en reglas, `src/lib/categorizer/llm.ts`) |
+| Categorización | Interfaz `Categorizer`: `CATEGORIZER=rules` (solo reglas) o `jev` (reglas → historial → [Jev](https://openrouter.ai/docs/guides/community/jev) vía OpenRouter, `src/lib/categorizer/jev.ts`) |
+| Estados de cuenta y MSI | `scripts/statements` (extractores Python con verificación de totales) + `scripts/import-statements.ts`; planes a meses en `installment_plans` (página `/msi`). Ver [docs/GUIA.md §8](docs/GUIA.md) |
 | Tiempo real | `LiveRefresh` revisa `/api/changes` con la pestaña visible y actividad reciente, y al volver a la pestaña; refresca solo cuando algo cambió |
 
 **Deduplicación:** hash SHA-256 de `tarjeta + minuto + monto + comercio normalizado` (Atajo/manual). Para estados de cuenta (solo traen día) es `tarjeta + día + monto + comercio`, y además se omite si ya existe un movimiento no-estado con misma tarjeta, día y monto.
@@ -85,7 +86,8 @@ Plantilla en [`.env.example`](.env.example). En Azure son *App Settings*.
 | `EMAIL_INGEST_TOKENS` | aleatorio | aleatorio | Tokens del puente Gmail, `nombre=token,otro=token` (cada token ≥ 32). **Distinto** de `INGEST_TOKEN`; sin definir, el endpoint rechaza todo |
 | `INGEST_TOKEN` | aleatorio | aleatorio | Token Bearer de `/api/ingest` (≥ 32 caracteres) |
 | `INGEST_TOKEN_PREVIOUS` | — | solo en rotación | Token anterior aún válido durante la rotación |
-| `CATEGORIZER` | `rules` | `rules` | `rules` o `llm` (stub) |
+| `CATEGORIZER` | `rules` | `rules` | `rules` o `jev` |
+| `OPENROUTER_API_KEY` | — | — | API key de OpenRouter para Jev (secreto: App Setting en Azure) |
 | `DB_SERVER`, `DB_PORT`, `DB_NAME` | `localhost`, 1433, `uzfinance` | `<srv>.database.windows.net`, —, `uzfinance` | Conexión |
 | `DB_AUTH` | `password` | `msi` | `msi` = Managed Identity (sin passwords) |
 | `DB_USER`, `DB_PASSWORD`, `DB_SA_PASSWORD` | docker local | — | Solo local |

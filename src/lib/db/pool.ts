@@ -25,6 +25,9 @@ function buildConfig(): sql.config {
       type: "azure-active-directory-msi-app-service",
       options: env.DB_CLIENT_ID ? { clientId: env.DB_CLIENT_ID } : {},
     };
+  } else if (env.DB_AUTH === "token") {
+    // Solo para scripts de administración desde tu equipo (token de `az account get-access-token`).
+    base.authentication = { type: "azure-active-directory-access-token", options: { token: env.AZURE_SQL_TOKEN ?? "" } };
   } else {
     base.user = env.DB_USER;
     base.password = env.DB_PASSWORD;
@@ -75,6 +78,8 @@ export const t = {
   bit: (value: boolean) => ({ type: sql.Bit, value }),
   date: (value: string | null) => ({ type: sql.Date, value: value ? new Date(`${value}T00:00:00Z`) : null }),
   dt: (value: Date) => ({ type: sql.DateTime2, value }),
+  dec: (value: number | null) => ({ type: sql.Decimal(4, 3), value }),
+  dec2: (value: number | null) => ({ type: sql.Decimal(6, 2), value }),
 };
 type Param = ReturnType<(typeof t)[keyof typeof t]>;
 

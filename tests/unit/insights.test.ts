@@ -54,6 +54,7 @@ describe("resolveArt", () => {
     expect(resolveArt(c("American Express Platinum", "amex"))).toBe("amex-platinum");
     expect(resolveArt(c("Explora Banamex Virtual", "banamex"))).toBe("banamex-explora");
     expect(resolveArt(c("Clásica Banamex", "banamex"))).toBe("banamex-clasica");
+    expect(resolveArt(c("Costco Banamex ···194", "banamex"))).toBe("banamex-costco");
     expect(resolveArt(c("Débito ···296", "banamex"))).toBe("banamex-debito");
     expect(resolveArt(c("Nu Mastercard Gold", "nu"))).toBe("nu");
     expect(resolveArt(c("Revolut", "other"))).toBe("generic");

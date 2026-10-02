@@ -20,7 +20,14 @@ export const cardSchema = z
   })
   .strict();
 
-export const categorySchema = z.object({ name: z.string().trim().min(1).max(60), color: color.default("#9ca3af") }).strict();
+export const categorySchema = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    color: color.default("#9ca3af"),
+    // undefined = no tocar la descripción (el editor de nombre/color no la manda); "" o null = borrarla.
+    description: z.string().trim().max(400).nullable().optional().transform((v) => (v === undefined ? undefined : v ? v : null)),
+  })
+  .strict();
 
 export const ruleSchema = z
   .object({

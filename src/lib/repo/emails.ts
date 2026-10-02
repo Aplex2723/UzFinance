@@ -82,16 +82,17 @@ export async function ingestBankEmail(m: EmailMessage, deps?: { categorizer?: Ca
 
   const categorizer = deps?.categorizer ?? (await getCategorizer());
   // El categorizador recibe SOLO el comercio ya normalizado.
-  const categoryId = tx.kind === "expense" ? await categorizer.categorize({ merchantRaw: tx.merchantNormalized, merchantNormalized: tx.merchantNormalized, amountCents: tx.amountCents }) : null;
+  const cat = tx.kind === "expense" ? await categorizer.categorizeDetailed({ merchantRaw: tx.merchantNormalized, merchantNormalized: tx.merchantNormalized, amountCents: tx.amountCents }) : null;
+  const categoryId = cat?.categoryId ?? null;
   try {
     const r = await query<{ id: number }>(
-      `INSERT dbo.transactions (occurred_at, occurred_date, amount_cents, merchant_raw, merchant_normalized, card_id, category_id, source, sources,
+      `INSERT dbo.transactions (occurred_at, occurred_date, amount_cents, merchant_raw, merchant_normalized, card_id, category_id, category_source, category_confidence, source, sources,
                                 dedupe_hash, notes, kind, is_recurring, auth_code, email_message_id, account_ref)
        OUTPUT INSERTED.id
-       VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, 'email', 'email', @hash, @notes, @kind, @rec, @auth, @mid, @acct)`,
+       VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, @csrc, @cconf, 'email', 'email', @hash, @notes, @kind, @rec, @auth, @mid, @acct)`,
       {
         at: t.dt(tx.occurredAt), date: t.date(localDate(tx.occurredAt)), amt: t.big(tx.amountCents), raw: t.str(tx.merchantRaw),
-        norm: t.str(tx.merchantNormalized), card: t.int(card.id), cat: t.int(categoryId), hash: t.char(emailHash(m.messageId)),
+        norm: t.str(tx.merchantNormalized), card: t.int(card.id), cat: t.int(categoryId), csrc: t.varchar(cat?.source ?? null), cconf: t.dec(cat?.confidence ?? null), hash: t.char(emailHash(m.messageId)),
         notes: t.str(tx.notes), kind: t.varchar(tx.kind), rec: t.bit(tx.recurring), auth: t.varchar(tx.authCode), mid: t.varchar(m.messageId), acct: t.varchar(tx.accountRef),
       },
     );
@@ -115,19 +116,24 @@ async function mergeIntoShortcut(messageId: string, tx: ParsedEmailTx, cardId: n
   if (!cand[0]) return null;
   const id = Number(cand[0].id);
   let categoryId = cand[0].category_id;
+  let fresh: Awaited<ReturnType<Categorizer["categorizeDetailed"]>> = null;
   if (categoryId === null) {
     const categorizer = deps?.categorizer ?? (await getCategorizer());
-    categoryId = await categorizer.categorize({ merchantRaw: tx.merchantNormalized, merchantNormalized: tx.merchantNormalized, amountCents: tx.amountCents });
+    fresh = await categorizer.categorizeDetailed({ merchantRaw: tx.merchantNormalized, merchantNormalized: tx.merchantNormalized, amountCents: tx.amountCents });
+    categoryId = fresh?.categoryId ?? null;
   }
   try {
     // dedupe_hash se conserva: así un reintento del Atajo sigue siendo duplicado.
     const r = await query(
       `UPDATE dbo.transactions SET merchant_raw=@raw, merchant_normalized=@norm, occurred_at=@at, occurred_date=@date,
-         auth_code=@auth, email_message_id=@mid, source='email', sources='shortcut,email', is_recurring=@rec, category_id=@cat, account_ref=@acct
+         auth_code=@auth, email_message_id=@mid, source='email', sources='shortcut,email', is_recurring=@rec, category_id=@cat, account_ref=@acct,
+         category_source = CASE WHEN @csrc IS NOT NULL THEN @csrc ELSE category_source END,
+         category_confidence = CASE WHEN @csrc IS NOT NULL THEN @cconf ELSE category_confidence END
        OUTPUT INSERTED.id WHERE id=@id AND email_message_id IS NULL`,
       {
         id: t.big(id), raw: t.str(tx.merchantRaw), norm: t.str(tx.merchantNormalized), at: t.dt(tx.occurredAt), date: t.date(localDate(tx.occurredAt)),
         auth: t.varchar(tx.authCode), mid: t.varchar(messageId), rec: t.bit(tx.recurring), cat: t.int(categoryId), acct: t.varchar(tx.accountRef),
+        csrc: t.varchar(fresh?.source ?? null), cconf: t.dec(fresh?.confidence ?? null),
       },
     );
     return r.length ? id : null;

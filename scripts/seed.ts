@@ -4,6 +4,8 @@ import { getEnv } from "../src/lib/env";
 import { getCategorizer } from "../src/lib/categorizer";
 import { createCard } from "../src/lib/repo/cards";
 import { createCategory } from "../src/lib/repo/categories";
+import { addMonthsIso } from "../src/lib/msi";
+import { upsertPlan } from "../src/lib/repo/plans";
 import { createRule } from "../src/lib/repo/rules";
 import { ingestTransaction } from "../src/lib/repo/transactions";
 import { parseAmountToCents } from "../src/lib/money";
@@ -72,6 +74,17 @@ async function main() {
     if (day === 20) await ingestTransaction({ merchant: "TELMEX", amountCents: 48900, cardRef: "Banamex Costco", occurredAt: base }, "shortcut", { categorizer });
   }
   await ingestTransaction({ merchant: "AMAZON REEMBOLSO", amountCents: -45900, cardRef: "Banamex Oro", occurredAt: new Date(now - 3 * 86400000) }, "shortcut", { categorizer });
+  // Comercios que ninguna regla conoce: quedan "por categorizar" (panel de revisión).
+  await ingestTransaction({ merchant: "TIENDITA DEL BARRIO DEMO", amountCents: 18500, cardRef: "Banamex Oro", occurredAt: new Date(now - 2 * 86400000) }, "shortcut", { categorizer });
+  await ingestTransaction({ merchant: "TIENDITA DEL BARRIO DEMO", amountCents: 9200, cardRef: "Banamex Oro", occurredAt: new Date(now - 4 * 86400000) }, "shortcut", { categorizer });
+  await ingestTransaction({ merchant: "PUESTO RARO DEMO", amountCents: 6000, cardRef: "Banamex Costco", occurredAt: new Date(now - 5 * 86400000) }, "shortcut", { categorizer });
+  // Planes a meses de ejemplo (inventados): uno largo, uno corto y uno que termina pronto.
+  const cardId = async (name: string) => (await query<{ id: number }>("SELECT id FROM dbo.cards WHERE name=@n", { n: { type: (await import("mssql")).default.NVarChar, value: name } }))[0].id;
+  const asOf = new Date(now - 10 * 86400000).toISOString().slice(0, 10);
+  const back = (months: number) => addMonthsIso(asOf, -months);
+  await upsertPlan({ cardId: await cardId("Banamex Oro"), merchant: "LAPTOP DEMO", originalCents: 2_400_000, monthlyCents: 100_000, pendingCents: 1_800_000, nTotal: 24, nCurrent: 6, asOf, startedOn: back(5), startedEstimated: true });
+  await upsertPlan({ cardId: await cardId("American Express Platinum"), merchant: "VIAJE DEMO", originalCents: 900_000, monthlyCents: 300_000, pendingCents: 600_000, nTotal: 3, nCurrent: 1, asOf, startedOn: asOf });
+  await upsertPlan({ cardId: await cardId("Banamex Costco"), merchant: "SOFA DEMO", originalCents: 1_200_000, monthlyCents: 100_000, pendingCents: 200_000, nTotal: 12, nCurrent: 10, asOf, startedOn: back(10), startedEstimated: true });
   const total = await query<{ n: number }>("SELECT COUNT(*) AS n FROM dbo.transactions");
   console.log(`Seed listo: ${catIds.size} categorías, 3 tarjetas, ${total[0].n} transacciones (generadas: ~${n}).`);
 }

@@ -40,10 +40,19 @@ export function CategoriesManager({ categories, rules }: { categories: Category[
       <Panel title="Categorías">
         <ul className="mb-4 divide-y divide-line">
           {categories.map((c) => (
-            <li key={c.id} className="flex items-center gap-3 py-2">
+            <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2">
               <input type="color" aria-label={`Color de ${c.name}`} defaultValue={c.color} className="h-7 w-7 cursor-pointer rounded-md border border-line bg-transparent" onBlur={(e) => e.target.value !== c.color && call(`/api/categories/${c.id}`, "PUT", { name: c.name, color: e.target.value })} />
               <input aria-label={`Nombre de ${c.name}`} defaultValue={c.name} maxLength={60} className="field !h-8 flex-1" onBlur={(e) => e.target.value.trim() && e.target.value !== c.name && call(`/api/categories/${c.id}`, "PUT", { name: e.target.value, color: c.color })} />
               <button className="btn btn-danger !h-8 !w-8 !p-0" aria-label={`Eliminar ${c.name}`} onClick={() => window.confirm(`¿Eliminar "${c.name}"? Sus movimientos quedarán sin categoría.`) && call(`/api/categories/${c.id}`, "DELETE")}><Trash2 size={13} /></button>
+              <textarea
+                aria-label={`Descripción de ${c.name}`}
+                defaultValue={c.description ?? ""}
+                rows={2}
+                maxLength={400}
+                placeholder="Ejemplos de comercios de esta categoría (la IA los usa para clasificar)"
+                className="field !h-auto w-full resize-none py-1.5 text-[11px] text-muted"
+                onBlur={(e) => e.target.value.trim() !== (c.description ?? "") && call(`/api/categories/${c.id}`, "PUT", { name: c.name, color: c.color, description: e.target.value })}
+              />
             </li>
           ))}
         </ul>
@@ -72,7 +81,7 @@ export function CategoriesManager({ categories, rules }: { categories: Category[
           <input name="priority" type="number" min={-1000} max={1000} defaultValue={0} className="field" aria-label="Prioridad" />
           <button className="btn btn-primary !h-[38px]">Agregar regla</button>
         </form>
-        <p className="mt-3 text-[11px] text-muted">Las reglas aplican a movimientos nuevos. Para los existentes sin categoría usa “Categorizar” en Inicio.</p>
+        <p className="mt-3 text-[11px] text-muted">Orden: tus reglas → comercios que ya categorizaste tú → la IA (Jev, usando la descripción de cada categoría). Las reglas aplican a movimientos nuevos; para los existentes sin categoría usa “Categorizar” en Inicio.</p>
       </Panel>
     </div>
   );

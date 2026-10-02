@@ -9,6 +9,9 @@ import { CardArt } from "@/components/CardArt";
 import { DashboardActions } from "@/components/DashboardActions";
 import { InsightList } from "@/components/insights/InsightList";
 import { KpiTile } from "@/components/insights/Kpi";
+import { GoalPanel } from "@/components/insights/GoalPanel";
+import { MsiPanel } from "@/components/insights/MsiPanel";
+import { PendingMerchants } from "@/components/PendingMerchants";
 import { PaceBar } from "@/components/insights/PaceBar";
 import { MonthNav } from "@/components/MonthNav";
 import { RecentActivity } from "@/components/RecentActivity";
@@ -18,12 +21,15 @@ import { Panel } from "@/components/ui/Panel";
 import { requirePageUser } from "@/lib/auth/page";
 import { listCards } from "@/lib/repo/cards";
 import { listUnparsed } from "@/lib/repo/emails";
+import { getMsi } from "@/lib/repo/plans";
 import { getInsights } from "@/lib/repo/insights";
 import { ISSUER_LABEL, monthLabel } from "@/lib/format";
 import { formatMXN } from "@/lib/money";
 import { getCardSummaries, getCumulative, getHeatmap, getOverview, getSankey, getWeekdayTotals } from "@/lib/repo/stats";
-import { listTransactions } from "@/lib/repo/transactions";
-import { currentMonth, MONTH_RE, prevMonth } from "@/lib/time";
+import { listCategories } from "@/lib/repo/categories";
+import { getGoal } from "@/lib/repo/goals";
+import { listTransactions, listUncategorizedMerchants } from "@/lib/repo/transactions";
+import { currentMonth, localDate, MONTH_RE, prevMonth } from "@/lib/time";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   await requirePageUser();
@@ -31,7 +37,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const raw = typeof sp.month === "string" ? sp.month : undefined;
   const month = raw && MONTH_RE.test(raw) ? raw : currentMonth();
 
-  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins] = await Promise.all([
+  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins, msi, pendingMerchants, categories, goal] = await Promise.all([
     getOverview(month),
     getCardSummaries(month),
     getCumulative(month),
@@ -43,6 +49,10 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     listUnparsed(),
     listTransactions({ kind: "card_payment", month, limit: 20 }),
     getInsights(month),
+    getMsi(),
+    listUncategorizedMerchants(8),
+    listCategories(),
+    getGoal(),
   ]);
   const paymentsTotal = payments.rows.reduce((a, r) => a + r.amount_cents, 0);
 
@@ -100,6 +110,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         />
       </section>
 
+      <GoalPanel goal={goal} income={ins.income} today={localDate(new Date())} projectedSaving={ins.isCurrent && ins.income > 0 ? ins.income - ins.projected : null} />
+
       <section aria-label="Tarjetas" className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
         {cards.map((c) => {
           const full = allCards.find((x) => x.id === c.id);
@@ -125,6 +137,10 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <Panel title="Insights del mes" action={<Link href={`/analitica${month === currentMonth() ? "" : `?month=${month}`}`} className="btn !h-7 !px-2.5 text-[11px]">Ver análisis</Link>}>
         <InsightList messages={ins.messages.slice(0, 4)} />
       </Panel>
+
+      <MsiPanel s={msi} />
+
+      <PendingMerchants merchants={pendingMerchants} categories={categories} />
 
       <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <Panel title="Gasto acumulado: este mes vs. anterior">

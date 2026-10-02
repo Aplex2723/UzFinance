@@ -45,3 +45,7 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# Extractores de estados de cuenta (Python)
+__pycache__/
+scripts/statements/.venv/

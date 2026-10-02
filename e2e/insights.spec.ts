@@ -65,7 +65,7 @@ test.describe("ingreso e insights", () => {
     await expect(page.getByTestId("income-used")).toHaveText(/\d+%/);
     await expect(page.getByTestId("avg-per-day")).toContainText("$");
     await expect(page.getByTestId("projection")).toContainText("$");
-    await expect(page.getByTestId("insight-list")).toBeVisible();
+    await expect(page.getByTestId("insight-list").first()).toBeVisible();
     // Los 4 KPIs y el estado de ingreso quedan antes que las tarjetas y las gráficas.
     const top = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
     expect(await top('[data-testid="pace-bar"]')).toBeLessThan(await top('section[aria-label="Tarjetas"]'));

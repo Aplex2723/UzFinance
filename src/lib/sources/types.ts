@@ -9,6 +9,12 @@ export type RawTransaction = {
   occurredAt: Date;
   categoryName?: string;
   notes?: string;
+  /** Por defecto 'expense'. Un pago de tarjeta no cuenta en ninguna estadística. */
+  kind?: "expense" | "card_payment";
+  /** Compra a MSI que originó un plan (ver installment_plans). */
+  planId?: number;
+  /** Nº de ocurrencia (0, 1, 2…) de un movimiento idéntico (tarjeta, día, monto, comercio) dentro del mismo estado de cuenta. */
+  seq?: number;
 };
 
 /**

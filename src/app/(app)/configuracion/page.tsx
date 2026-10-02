@@ -18,7 +18,7 @@ export default async function Page() {
   const rows: [string, string][] = [
     ["Sesión", user.email],
     ["Modo de autenticación", env.AUTH_MODE === "dev" ? "dev (solo local)" : "App Service Authentication (Entra ID)"],
-    ["Categorizador", env.CATEGORIZER === "llm" ? "LLM (stub → reglas)" : "Reglas"],
+    ["Categorizador", env.CATEGORIZER === "jev" && env.OPENROUTER_API_KEY ? "Jev (reglas → historial → Jev)" : "Solo reglas"],
     ["Base de datos", env.DB_AUTH === "msi" ? "Azure SQL · Managed Identity" : "SQL Server local (docker)"],
   ];
   return (

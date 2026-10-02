@@ -28,6 +28,15 @@ Gmail (avisos de Banamex) ──► Google Apps Script ──POST /api/ingest/em
   presupuesto diario. Un solo valor vigente para todos los meses. Valor inicial 350,000.
 - **Insights** (`src/lib/insights.ts`): frases generadas por reglas fijas (sin IA) con las cifras de
   `src/lib/repo/insights.ts`. Dinero siempre en centavos enteros (BIGINT).
+- **Categorías (Jev):** orden *tus reglas → comercios que ya categorizaste tú (historial) → Jev*. Jev es el modelo de decisión de
+  TypeSafe vía OpenRouter (`src/lib/categorizer/jev.ts`; no es un chat: responde UNA categoría con probabilidad). Se le manda solo el
+  comercio y las categorías con su **descripción** (`categories.description`, editable en *Categorías*: cuanto más vocabulario real
+  del comercio, más precisa). Probabilidad < 0.6 → queda “sin categoría” y sale en el panel *Comercios por categorizar* del inicio
+  (eliges la categoría una vez y vale para todos sus movimientos y los futuros). Lo de Jev lleva etiqueta **IA**; si lo corriges se
+  vuelve “manual” y manda sobre Jev. Si Jev falla o tarda (>2.5 s en la ingesta) la transacción se guarda igual sin categoría.
+  `CATEGORIZER=jev` + `OPENROUTER_API_KEY` (App Setting; sin la key cae a solo reglas). Medir precisión: `scripts/jev-eval.ts`.
+- **Estados de cuenta y MSI:** ver sección 8. **Regla de oro:** cada compra cuenta UNA vez, a su fecha y a precio completo (como el
+  Atajo); las mensualidades de MSI no son gastos, solo alimentan los *planes* (`installment_plans`, página `/msi`).
 - **Tarjetas ilustradas:** SVG propios (`src/components/CardArt.tsx`); el diseño se deduce del emisor y el nombre
   (`src/lib/card-art.ts`) o se elige en *Editar tarjeta*. No usan imágenes externas.
 - **App instalable (PWA):** `src/app/manifest.ts` + íconos en `public/icons/` (se regeneran con
@@ -107,9 +116,43 @@ iPhone: Safari → abre la app → Compartir → **Añadir a pantalla de inicio*
 Abre a pantalla completa con su ícono; el inicio de sesión de Microsoft ocurre dentro de la app instalada.
 Requiere HTTPS (producción) y que `/manifest.webmanifest` y `/icons/*` estén en `excludedPaths` (el navegador los pide sin cookies).
 
-## 7. Trampas conocidas
+## 7. Categorización con Jev (detalle)
+
+- Documentación: <https://openrouter.ai/docs/guides/community/jev-tutorial> · endpoint `POST https://openrouter.ai/api/alpha/decisions`,
+  modelo `typesafe/jev-1.13`, pregunta `choice` con `criteria` = {categoría: descripción}. ~$0.00002 por comercio; la salida es gratis.
+- Las categorías iniciales salen de la migración `007_seed_categories.sql` (25, con descripción); solo crea las que faltan.
+- Precisión medida con ~170 comercios etiquetados a mano: 87 % con descripciones genéricas → 96 % tras ajustarlas al vocabulario de
+  los estados (ese 96 % es “dentro de muestra”: lo esperable en comercios nuevos es ~90 %). Los vendedores de Mercado Pago
+  (`MERPAGO*NOMBRE`) casi nunca se pueden deducir: van al panel de revisión.
+- Para mejorar: edita la descripción de la categoría (agrega nombres como aparecen en el estado) o categoriza el comercio a mano.
+
+## 8. Importar estados de cuenta y MSI
+
+1. **Extraer** (Python, `scripts/statements/README.md`): `run_all.py --downloads ~/Downloads --out <carpeta fuera del repo>` convierte los
+   PDF/CSV de Banamex, Nu y Amex en JSON y **verifica los totales impresos** (si algo no cuadra sale con error). Los “Envío de movimientos”
+   de Banamex son imagen: se transcriben a mano (ver README). Los JSON llevan datos reales: nunca en el repo.
+2. **Mapa de tarjetas** (JSON fuera del repo, formato en `src/lib/import/statements.ts`): a qué tarjeta va cada `card_key`, sección
+   (digital) o titular (adicionales de Amex); crea las que falten.
+3. **Importar**: `npx tsx scripts/import-statements.ts --dir <extract> --cards <mapa.json> [--dry-run]`. Azure: `--azure` (necesita
+   `AZ_SUBSCRIPTION`, `DB_SERVER`, `DB_NAME`, `az login` y una regla de firewall temporal) y `--yes` para escribir; sin `--yes` simula.
+   Es idempotente. No duplica lo que ya llegó por Atajo/correo (misma tarjeta + monto + ±2 días, por conteo; pagos de tarjeta: cualquier
+   tarjeta ±5 días).
+4. **Qué se guarda:** compras, reembolsos, comisiones/intereses/IVA, efectivo, impuestos y transferencias SPEI a terceros (categoría
+   *Transferencias*) como gasto; pagos de tarjeta como `card_payment`; **no** se guardan traspasos propios, ingresos ni mensualidades de MSI.
+5. **MSI:** `installment_plans` guarda la foto del último estado (cuántas mensualidades van, saldo). Las mensualidades se cargan el día
+   siguiente al corte (`src/lib/msi.ts`), de ahí el calendario, “cuándo termina” y las frases de `/msi`. En Banamex la fecha de compra
+   no se imprime: se deduce del avance del plan (marcada `started_estimated`). Compras nuevas a MSI entran completas con etiqueta
+   “A meses (MSI)”. Importar un estado más nuevo actualiza el mismo plan; uno más viejo no lo retrocede.
+6. `--overrides <archivo.json>` aplica tus correcciones a movimientos concretos (categoría, nombre); formato en `overrideSchema`.
+7. Reglas confirmadas por el usuario: en el CSV de Nu, “N MSI” es compra a N meses y el monto del renglón es la **mensualidad** del mes en curso
+   (total = monto × N). Un cargo diferido a meses futuros sin mensualidad (p. ej. “a pagar en octubre 2027”) no se importa como plan.
+   Los depósitos “Inversión Perfiles” son ahorro para el departamento (meta en el inicio), no gasto.
+
+## 9. Trampas conocidas
 
 - `sed -i` en macOS necesita `sed -i ''`. Los scripts temporales van al scratchpad, no a `/tmp`.
 - Cada migración SQL corre en un solo lote: DDL sobre columnas nuevas dentro de `EXEC('…')`.
 - Dos compras idénticas (misma tarjeta y monto) a menos de 15 min pueden cruzarse al fusionar Atajo↔correo (límite conocido).
+- `DB_AUTH=token` (+ `AZURE_SQL_TOKEN`) existe solo para scripts de administración desde tu equipo; la app en Azure usa `msi`.
+- `resetDb()` de las pruebas borra planes antes que tarjetas (FK). Migraciones de Fase F: `006` (esquema) y `007` (categorías).
 - Cambiar App Settings reinicia la app unos segundos.

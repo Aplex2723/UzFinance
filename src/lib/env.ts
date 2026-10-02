@@ -30,12 +30,15 @@ const schema = z.object({
     .string()
     .optional()
     .refine((v) => !v || parseNamedTokens(v) !== null, "EMAIL_INGEST_TOKENS: formato nombre=token (token ≥ 32 caracteres)"),
-  CATEGORIZER: z.enum(["rules", "llm"]).default("rules"),
+  /** rules = solo reglas; jev = reglas + historial + Jev (necesita OPENROUTER_API_KEY; sin ella cae a reglas). */
+  CATEGORIZER: z.enum(["rules", "jev"]).default("rules"),
+  OPENROUTER_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(20).optional()),
   DB_SERVER: z.string().min(1),
   DB_PORT: z.coerce.number().default(1433),
   DB_NAME: z.string().min(1),
-  /** password = local (docker); msi = Managed Identity en Azure. */
-  DB_AUTH: z.enum(["password", "msi"]).default("msi"),
+  /** password = local (docker); msi = Managed Identity en Azure; token = scripts de administración con un token de `az` (AZURE_SQL_TOKEN). */
+  DB_AUTH: z.enum(["password", "msi", "token"]).default("msi"),
+  AZURE_SQL_TOKEN: z.string().optional(),
   DB_USER: z.string().optional(),
   DB_PASSWORD: z.string().optional(),
   DB_TRUST_SERVER_CERT: z.stringbool().default(false),

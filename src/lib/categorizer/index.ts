@@ -3,12 +3,17 @@ import type { Rule } from "@/lib/types";
 
 export type CategorizeInput = { merchantRaw: string; merchantNormalized: string; amountCents: number };
 
+/** Quién decidió la categoría: regla del usuario, historial (mismo comercio ya categorizado a mano) o Jev. */
+export type CategorySource = "rule" | "history" | "jev";
+export type Categorization = { categoryId: number; source: CategorySource; confidence: number | null };
+
 /**
- * Punto de extensión: cualquier implementación (reglas, LLM, híbrida) devuelve
- * un category_id o null. La ingesta solo conoce esta interfaz.
+ * Punto de extensión: cualquier implementación (reglas, Jev, híbrida) devuelve la categoría
+ * y de dónde salió, o null. La ingesta solo conoce esta interfaz.
  */
 export interface Categorizer {
   categorize(input: CategorizeInput): Promise<number | null>;
+  categorizeDetailed(input: CategorizeInput): Promise<Categorization | null>;
 }
 
 export function matchRule(rules: Rule[], merchantNormalized: string): number | null {
@@ -28,12 +33,17 @@ export function matchRule(rules: Rule[], merchantNormalized: string): number | n
   return null;
 }
 
-export async function getCategorizer(): Promise<Categorizer> {
+/**
+ * timeoutMs: tope de espera a Jev. El Atajo/correo usan un tope corto (la ingesta no debe fallar ni tardar);
+ * la categorización masiva usa uno mayor.
+ */
+export async function getCategorizer(opts: { timeoutMs?: number } = {}): Promise<Categorizer> {
   const { RulesCategorizer } = await import("./rules");
   const rules = new RulesCategorizer();
-  if (getEnv().CATEGORIZER === "llm") {
-    const { LlmCategorizer } = await import("./llm");
-    return new LlmCategorizer(rules);
+  const env = getEnv();
+  if (env.CATEGORIZER === "jev" && env.OPENROUTER_API_KEY) {
+    const { JevCategorizer } = await import("./jev");
+    return new JevCategorizer(rules, { apiKey: env.OPENROUTER_API_KEY, timeoutMs: opts.timeoutMs ?? 2500 });
   }
   return rules;
 }
