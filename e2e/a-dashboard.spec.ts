@@ -25,6 +25,11 @@ test.describe("dashboard (captura de diseño)", () => {
     await page.getByTestId("wallet-amex").click();
     await expect(page.getByTestId("wallet-amex")).toHaveAttribute("aria-expanded", "true");
     expect(await page.getByRole("article").count()).toBeGreaterThanOrEqual(1);
+    // el detalle debe quedar a la vista justo debajo del banco tocado (en el celular los bancos van en columna)
+    const region = page.getByRole("region", { name: /Tarjetas American Express/ }).filter({ visible: true });
+    await expect(region).toBeVisible();
+    await expect(region).toBeInViewport(); // se trae a la vista (en celular queda justo bajo el banco)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.getByTestId("wallet-amex").click();
     await expect(page.getByRole("article")).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Agregar otra tarjeta/ })).toBeVisible();
