@@ -1,11 +1,9 @@
-import { Plus } from "lucide-react";
 import Link from "next/link";
 import { CumulativeChart } from "@/components/charts/CumulativeChart";
 import { Heatmap } from "@/components/charts/Heatmap";
 import { SankeyChart } from "@/components/charts/SankeyChart";
-import { Sparkline } from "@/components/charts/Sparkline";
 import { WeekdayBars } from "@/components/charts/WeekdayBars";
-import { CardArt } from "@/components/CardArt";
+import { CardWallet } from "@/components/CardWallet";
 import { DashboardActions } from "@/components/DashboardActions";
 import { InsightList } from "@/components/insights/InsightList";
 import { KpiTile } from "@/components/insights/Kpi";
@@ -112,27 +110,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
       <GoalPanel goal={goal} income={ins.income} today={localDate(new Date())} projectedSaving={ins.isCurrent && ins.income > 0 ? ins.income - ins.projected : null} />
 
-      <section aria-label="Tarjetas" className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
-        {cards.map((c) => {
-          const full = allCards.find((x) => x.id === c.id);
-          return (
-            <article key={c.id} className="glass flex w-[236px] shrink-0 snap-start flex-col gap-3 p-3 sm:w-auto" aria-label={c.name}>
-              <CardArt card={{ name: c.name, issuer: c.issuer, last4: c.last4, color: c.color, art: full?.art ?? null }} />
-              <div className="flex items-end justify-between gap-2 px-1">
-                <div>
-                  <p className="num text-2xl font-semibold">{formatMXN(c.cents, { compact: true })}</p>
-                  <div className="mt-1"><Delta pct={c.deltaPct} label="sin base" /></div>
-                </div>
-                <div className="w-[88px]"><Sparkline values={c.spark} label={c.name} color={c.deltaPct !== null && c.deltaPct > 0 ? "#ef4444" : "#22c55e"} /></div>
-              </div>
-            </article>
-          );
-        })}
-        <Link href="/tarjetas?new=1" className="flex min-h-[112px] w-[200px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-[18px] border border-dashed border-line text-center text-muted transition-colors hover:border-white/25 hover:text-fg sm:w-auto">
-          <Plus size={16} aria-hidden />
-          <span className="max-w-[170px] text-[12px]">Agregar otra tarjeta a tu cuenta</span>
-        </Link>
-      </section>
+      <CardWallet cards={cards.map((c) => ({ id: c.id, name: c.name, issuer: c.issuer, last4: c.last4, color: c.color, art: allCards.find((x) => x.id === c.id)?.art ?? null, cents: c.cents, prevCents: c.prevCents, deltaPct: c.deltaPct, spark: c.spark }))} />
 
       <Panel title="Insights del mes" action={<Link href={`/analitica${month === currentMonth() ? "" : `?month=${month}`}`} className="btn !h-7 !px-2.5 text-[11px]">Ver análisis</Link>}>
         <InsightList messages={ins.messages.slice(0, 4)} />

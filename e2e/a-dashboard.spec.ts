@@ -19,7 +19,14 @@ test.describe("dashboard (captura de diseño)", () => {
     await expect(page.getByRole("button", { name: "Agregar gasto" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Importar CSV" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Categorizar" })).toBeVisible();
-    expect(await page.getByRole("article").count()).toBeGreaterThanOrEqual(3); // una card por tarjeta
+    // tarjetero: un montón por banco; al tocarlo se despliegan sus tarjetas
+    await expect(page.getByTestId("wallet-amex")).toBeVisible();
+    await expect(page.getByRole("article")).toHaveCount(0);
+    await page.getByTestId("wallet-amex").click();
+    await expect(page.getByTestId("wallet-amex")).toHaveAttribute("aria-expanded", "true");
+    expect(await page.getByRole("article").count()).toBeGreaterThanOrEqual(1);
+    await page.getByTestId("wallet-amex").click();
+    await expect(page.getByRole("article")).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Agregar otra tarjeta/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: /Gasto acumulado/ })).toBeVisible();
     await expect(page.getByRole("group", { name: "Gasto por día de la semana" }).getByRole("button")).toHaveCount(7);
