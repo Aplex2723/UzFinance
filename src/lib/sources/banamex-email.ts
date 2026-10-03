@@ -14,7 +14,13 @@ export const BANAMEX_SENDER = "notificaciones@banamex.com";
 const MAX_SKEW_MS = 7 * 86_400_000;
 
 export type CardVariant = "credit" | "additional" | "debit";
-export type BankCardRef = { variant: CardVariant; digits: string; product: string };
+export type BankCardRef = {
+  variant: CardVariant;
+  digits: string;
+  product: string;
+  /** Correos sin nombre de producto (p. ej. compras con Apple Pay: solo "**046"): se liga por dígitos a una tarjeta propia. */
+  productUnknown?: boolean;
+};
 
 /**
  * Clave única de tarjeta: producto + bandera de adicional + dígitos.
@@ -238,6 +244,9 @@ export function parseCardRef(cells: string[], fullText: string): BankCardRef | n
     m = /Tarjeta\s+M\.?\s?N\.?\s*\*{2,4}\s*(\d{3,4})\b/i.exec(h);
     if (m) return { variant: "debit", digits: m[1], product: "Débito" };
   }
+  // Sin producto: la tarjeta aparece solo como "**046" (compras con Apple Pay).
+  const bare = /(?:^|[\s|])\*{2,3}\s*(\d{3,4})\b/.exec(hay[hay.length - 1]);
+  if (bare) return { variant: "credit", digits: bare[1], product: "Banamex", productUnknown: true };
   return null;
 }
 

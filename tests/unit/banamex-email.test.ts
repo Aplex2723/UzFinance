@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cardKey, classifySubject, isOwnCardPayee, normalizeBanamexMerchant, parseBanamexEmail, parseDateTime, parseMoney, SUPPORTED_SUBJECTS, toCells, zonedToUtc,
 } from "@/lib/sources/banamex-email";
-import { A, asOneLine, asPipes, asRealLayout, asTabs, B, C, D, E, IGNORED_SUBJECTS } from "../fixtures/banamex-emails";
+import { A, AP, asOneLine, asPipes, asRealLayout, asTabs, B, C, D, E, IGNORED_SUBJECTS } from "../fixtures/banamex-emails";
 
 type F = { subject: string; body: string; receivedAt: Date };
 const parse = (f: F) => parseBanamexEmail({ subject: f.subject, bodyText: f.body, receivedAt: f.receivedAt });
@@ -71,6 +71,18 @@ describe("A: compra tarjeta de crédito", () => {
     for (const body of [asOneLine(A.body), asPipes(A.body), asTabs(A.body)]) expect(tx({ ...A, body })).toEqual(base);
   });
   it("no usa el 'Mínimo a pagar' como monto", () => expect(tx(A).amountCents).not.toBe(80000));
+});
+
+describe("compra con Apple Pay (solo '**dígitos', sin producto)", () => {
+  it("se lee la tarjeta por dígitos y queda marcada sin producto", () => {
+    const r = tx(AP);
+    expect(r).toMatchObject({ type: "A", kind: "expense", amountCents: 3900, merchantRaw: "TIENDA EJEMPLO ALAMO", authCode: "000009" });
+    expect(r.card).toEqual({ variant: "credit", digits: "000", product: "Banamex", productUnknown: true });
+  });
+  it("mismo resultado en el formato real de getPlainBody()", () => expect(tx({ ...AP, body: asRealLayout(AP.body) })).toEqual(tx(AP)));
+  it("sin ningún dígito de tarjeta sigue siendo unparsed", () => {
+    expect(parse({ ...AP, body: AP.body.replace("**000", "") })).toMatchObject({ kind: "unparsed", reason: "no se reconoció la tarjeta" });
+  });
 });
 
 describe("B: tarjeta adicional", () => {

@@ -18,6 +18,19 @@ Información importante de tu tarjeta
 ${FOOT}`,
 };
 
+/** Compra con Apple Pay: el correo no trae el nombre del producto, solo los últimos dígitos ("**000"). */
+export const AP = {
+  subject: "Retiro/Compra con tarjeta Banamex",
+  receivedAt: new Date("2026-10-03T03:14:00Z"),
+  body: `2 oct 2026, 21:13 h.
+Se realizó la siguiente operación: Retiro / Compra
+JUAN EJEMPLO PEREZ
+**000
+${rows([["Monto", "$39.00"], ["Establecimiento", "TIENDA EJEMPLO ALAMO"], ["Fecha y hora", "2026/10/2 09:13:49 PM"], ["Estatus", "Exitoso"], ["No. Autorización", "000009"]])}
+Información importante de tu tarjeta
+${FOOT}`,
+};
+
 export const B = {
   subject: "Retiro/Compra con tarjeta adicional",
   receivedAt: new Date("2026-10-01T23:17:30Z"),

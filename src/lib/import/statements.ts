@@ -295,6 +295,9 @@ export async function importStatements(
       used.add(hit.id);
       c.stat.existing++;
       if (c.planId !== undefined && c.notes?.startsWith("Compra a")) c.stat.purchasesFromPlans = Math.max(0, c.stat.purchasesFromPlans - 1);
+    } else if (c.kind === "card_payment" && toInsert.some((x) => x.kind === "card_payment" && x.cents === c.cents && dayDiff(x.date, c.date) <= 5)) {
+      // El mismo pago sale en el estado de la tarjeta ("pago en línea") y en el del débito (domiciliación): se guarda una vez.
+      c.stat.existing++;
     } else toInsert.push(c);
   }
 

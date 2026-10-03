@@ -12,7 +12,7 @@ import { getOverview, getCategoryBreakdown } from "@/lib/repo/stats";
 import { closePool, query } from "@/lib/db/pool";
 import { resetEnvCache } from "@/lib/env";
 import { emailFailures, emailPerIp, ingestFailures, ingestPerIp } from "@/lib/security/ingest-limiters";
-import { A, B, C, D, E } from "../fixtures/banamex-emails";
+import { A, AP, B, C, D, E } from "../fixtures/banamex-emails";
 import { authed, ctx, EMAIL_TOKEN, req, resetDb, TOKEN } from "../helpers";
 
 let n = 0;
@@ -112,6 +112,19 @@ describe("validación", () => {
     const res = await postMail(mail(A, "msg-1"), { ...bearer, "x-dry-run": "1" });
     expect(await res.json()).toEqual({ status: "parsed", kind: "expense", type: "A", dryRun: true });
     expect(await count()).toBe(0);
+  });
+});
+
+describe("compra con Apple Pay (correo sin nombre de producto)", () => {
+  it("se asigna a la tarjeta Banamex propia con esos dígitos, sin crear otra", async () => {
+    expect((await send(A, "msg-ap-base")).res.status).toBe(200); // crea "Explora Banamex ···000" por producto + dígitos
+    const cards = async () => Number((await query<{ n: number }>("SELECT COUNT(*) n FROM dbo.cards"))[0].n);
+    const before = await cards();
+    const { json } = await send(AP, "msg-ap-pay");
+    expect(json).toMatchObject({ status: "created", cardCreated: false });
+    expect(await cards()).toBe(before);
+    const r = await query<{ name: string; amount_cents: string }>("SELECT c.name, x.amount_cents FROM dbo.transactions x JOIN dbo.cards c ON c.id=x.card_id WHERE x.auth_code='000009'");
+    expect(r).toEqual([{ name: expect.stringContaining("Explora Banamex"), amount_cents: "3900" }]);
   });
 });
 

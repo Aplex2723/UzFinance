@@ -99,6 +99,14 @@ export async function resolveCard(ref: string): Promise<{ card: Card; matched: b
  *  3) se crea "sin nombrar" para que la nombres en el dashboard.
  */
 export async function resolveBankCard(ref: BankCardRef): Promise<{ card: Card; created: boolean }> {
+  if (ref.productUnknown) {
+    // El correo no dice qué producto es: si solo una tarjeta Banamex activa termina en esos dígitos, es esa.
+    const same = await query<Row>(
+      `SELECT ${COLS} FROM dbo.cards WHERE issuer='banamex' AND last4=@d AND active=1 AND name <> @sys`,
+      { d: t.varchar(ref.digits), sys: t.str(DOMICILIACION) },
+    );
+    if (same.length === 1) return { card: map(same[0]), created: false };
+  }
   const key = cardKey(ref);
   const find = async () => (await query<Row>(`SELECT ${COLS} FROM dbo.cards WHERE bank_key=@k`, { k: t.varchar(key) }))[0];
   const hit = await find();

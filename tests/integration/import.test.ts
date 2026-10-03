@@ -121,6 +121,15 @@ describe("importStatements", () => {
     expect((await rows()).filter((x) => x.kind === "card_payment")).toHaveLength(1);
   });
 
+  it("el mismo pago visto en el estado de la tarjeta y en el del débito (misma importación) se guarda una vez", async () => {
+    const cardDoc = doc({ document: "plata_stmt", card_key: "plata", transactions: [tx({ date: "2026-08-28", merchant: "GRACIAS POR SU PAGO EN LINEA", amount_cents: -4_053_669, type: "payment" })] });
+    const debitDoc = doc({ document: "banco_debito", card_key: "banco", transactions: [tx({ date: "2026-08-31", merchant: "PLATA CO", amount_cents: 4_053_669, type: "domiciliation_card_payment", section: "domiciliation" })] });
+    const rep = await run([cardDoc, debitDoc]);
+    const pays = (await rows()).filter((x) => x.kind === "card_payment");
+    expect(pays).toHaveLength(1);
+    expect(rep.docs.reduce((a, d) => a + d.existing, 0)).toBe(1);
+  });
+
   it("holders de Amex: el titular va a la tarjeta por defecto y el adicional a su propia tarjeta", async () => {
     const amex = doc({
       document: "plata_stmt", card_key: "plata", as_of: "2026-09-25", period: { start: "2026-08-26", end: "2026-09-25" },
