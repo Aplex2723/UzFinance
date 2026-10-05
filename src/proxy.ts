@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth/session";
+import { persistAuthCookie } from "@/lib/auth/session-cookie";
 
 /**
  * Defensa en profundidad + CSP con nonce.
@@ -46,6 +47,7 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("Content-Security-Policy", csp);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", csp);
+  if (!TOKEN_AUTH_PATHS.has(pathname)) persistAuthCookie(request.headers.get("cookie"), response.headers);
   return response;
 }
 
