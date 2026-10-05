@@ -1,4 +1,14 @@
-import { createCanvas } from "@napi-rs/canvas";
+import path from "node:path";
+import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
+
+// Fuente empaquetada en node_modules: así el dibujo (y el OCR de las pruebas) es idéntico en cualquier máquina,
+// con o sin fuentes del sistema (CI en Linux, Mac…). Con la fuente por omisión el OCR leía distinto según el sistema.
+const FONT = "UzTestSans";
+try {
+  GlobalFonts.registerFromPath(path.join(process.cwd(), "node_modules", "@fontsource-variable", "inter", "files", "inter-latin-wght-normal.woff2"), FONT);
+} catch {
+  /* sin la fuente se usa la del sistema */
+}
 
 /**
  * PDFs sintéticos para pruebas (todo inventado; el repo puede ser público):
@@ -54,7 +64,7 @@ export function imagePdf(pages: string[][]): Uint8Array {
     let y = 90;
     for (const l of lines) {
       const big = /^\$/.test(l);
-      g.font = big ? "bold 64px sans-serif" : "28px sans-serif";
+      g.font = big ? `64px ${FONT}, sans-serif` : `28px ${FONT}, sans-serif`;
       g.fillText(l, 60, y);
       y += big ? 90 : 56;
     }
