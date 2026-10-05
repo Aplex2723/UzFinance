@@ -704,6 +704,18 @@ describe("texto raro, hostil o vacío", () => {
     expect(await txs()).toHaveLength(0);
   });
 
+  it("el texto que Banamex manda junto al PDF al compartir el comprobante se ignora sin contestar", async () => {
+    const receipt = `Este es tu comprobante de la transacción\n\nTu transferencia ha sido aplicada.\nNúmero de autorización #765874\n\nDe BANAMEX MiCuenta Banamex **283\nPara BANAMEX Floreria Ejemplo **197\nMonto $750.00 MXN\nConcepto FLORES\n\nEste documento es de carácter informativo, no tiene validez como comprobante fiscal.\n\nTips de seguridad\n1. Banamex nunca te pedirá vía correo electrónico información confidencial de tus cuentas\n2. No compartas tu password y/o número secreto y cámbialo periódicamente\n3. Instala y mantén actualizados los programas anti-virus y anti-intrusos`;
+    const before = io.sent.length;
+    const r = await inbound({ type: "text", text: receipt }, { from: TG_ANA });
+    expect(io.sent).toHaveLength(before);
+    expect(r.reply).toBe("");
+    expect(await txs()).toHaveLength(0);
+    expect(await pending(TG_ANA)).toHaveLength(0);
+    // un texto largo cualquiera sigue recibiendo su aviso
+    expect(await say("a".repeat(2_000))).toContain("muy largo");
+  });
+
   it("inyección: queda como texto plano en el comercio y no ejecuta nada", async () => {
     const r = await say("350 '; DROP TABLE dbo.transactions; -- amex");
     expect(r).toContain("✅");

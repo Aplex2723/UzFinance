@@ -30,7 +30,7 @@ export function TransferSummary({ tr, read }: { tr: Transfer["transfer"]; read: 
     ["Cuenta de origen", `${tr.originLabel} ···${tr.originTail}${tr.accountType ? ` · ${tr.accountType}` : ""}`],
     ["Destino", dest || "—"],
     ["Concepto", tr.concept ?? "—"],
-    ["Clave de rastreo", tr.trackingKey],
+    tr.trackingKey.startsWith("AUT") && tr.authCode ? ["Autorización (sin rastreo)", tr.authCode] : ["Clave de rastreo", tr.trackingKey],
   ];
   return (
     <dl className="divide-y divide-line" data-testid="transfer-summary">

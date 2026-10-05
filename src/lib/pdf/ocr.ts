@@ -1,5 +1,5 @@
 import path from "node:path";
-import { createWorker, type Worker } from "tesseract.js";
+import { createWorker, PSM, type Worker } from "tesseract.js";
 import { renderPageAsImage } from "unpdf";
 import { openPdf, PDF_MAX_PAGES } from "./text";
 
@@ -16,6 +16,8 @@ export const OCR_SCALES = [2.5, 3.5] as const;
 /** Tope de píxeles por página renderizada (una página gigante a 3.5× serían GB de memoria nativa). Una carta a 3.5× ≈ 6 MP. */
 export const OCR_MAX_PIXELS = 25_000_000;
 const OCR_TIMEOUT_MS = 90_000;
+const START_TIMEOUT_MS = 30_000;
+const STOP_TIMEOUT_MS = 5_000;
 const IDLE_MS = 60_000;
 
 export class OcrError extends Error {}
@@ -26,8 +28,30 @@ let workerPromise: Promise<Worker> | null = null;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let chain: Promise<unknown> = Promise.resolve();
 
+/** Espera `p` como máximo `ms`; si no responde, `onTimeout` decide (lanzar o seguir). Un worker roto puede no resolver NI rechazar jamás. */
+function within<T>(p: Promise<T>, ms: number, onTimeout: () => T | Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => Promise.resolve().then(onTimeout).then(resolve, reject), ms);
+    timer.unref?.();
+  });
+  return Promise.race([p, limit]).finally(() => clearTimeout(timer));
+}
+
 async function getWorker(): Promise<Worker> {
-  workerPromise ??= createWorker("spa", 1, { langPath: langPath(), gzip: true, cacheMethod: "none" }).catch((e) => {
+  workerPromise ??= within(
+    createWorker("spa", 1, { langPath: langPath(), gzip: true, cacheMethod: "none" })
+      // El modo por omisión de tesseract.js (un solo bloque) se salta líneas sueltas en letra grande, como el "$750.00 MXN" de los comprobantes
+      // de Banamex. La segmentación automática de página las lee en las dos resoluciones.
+      .then(async (w) => {
+        await w.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
+        return w;
+      }),
+    START_TIMEOUT_MS,
+    () => {
+      throw new Error("el motor no arrancó a tiempo");
+    },
+  ).catch((e) => {
     workerPromise = null;
     throw new OcrError(`No se pudo iniciar el OCR: ${(e as Error).message}`);
   });
@@ -39,11 +63,13 @@ async function stopWorker() {
   workerPromise = null;
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = null;
-  try {
-    await (await p)?.terminate();
-  } catch {
-    /* ya estaba caído */
-  }
+  if (!p) return;
+  // Un worker que nunca terminó de arrancar deja su promesa colgada: esperarla sin límite bloquearía la cola de OCR para siempre.
+  await within(
+    p.then((w) => w.terminate()).then(() => undefined, () => undefined),
+    STOP_TIMEOUT_MS,
+    () => undefined,
+  );
 }
 
 const armIdle = () => {

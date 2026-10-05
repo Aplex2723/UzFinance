@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Categorizer } from "@/lib/categorizer";
 import { isUniqueViolation, query, t } from "@/lib/db/pool";
 import { normalizeMerchant } from "@/lib/merchant";
-import { isGenericConcept, transferMerchant, type ParsedTransfer } from "@/lib/pdf/receipts/banamex-transfer";
+import { isDerivedKey, isGenericConcept, transferMerchant, type ParsedTransfer } from "@/lib/pdf/receipts/banamex-transfer";
 import { isOwnCardPayee } from "@/lib/sources/banamex-email";
 import { localDate } from "@/lib/time";
 import type { Card } from "@/lib/types";
@@ -74,7 +74,7 @@ export type TransferOverrides = { merchant?: string; categoryId?: number | null;
 export function transferNotes(tr: ParsedTransfer): string {
   const dest = [tr.destName, tr.destBank ? `(${tr.destBank})` : null, tr.destTail ? `···${tr.destTail}` : null].filter(Boolean).join(" ");
   // El concepto ya es el comercio (o el genérico del banco, que no aporta): no se repite en las notas.
-  return [dest ? `A ${dest}` : null, tr.reference ? `Ref. ${tr.reference}` : null, `Rastreo ${tr.trackingKey}`].filter(Boolean).join(" · ").slice(0, 500);
+  return [dest ? `A ${dest}` : null, tr.reference ? `Ref. ${tr.reference}` : null, (isDerivedKey(tr.trackingKey) && tr.authCode ? `Autorización ${tr.authCode}` : `Rastreo ${tr.trackingKey}`)].filter(Boolean).join(" · ").slice(0, 500);
 }
 
 const receiptHash = (trackingKey: string) => createHash("sha256").update(`receipt|${trackingKey}`).digest("hex");

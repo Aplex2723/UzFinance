@@ -49,6 +49,24 @@ describe("comprobante de transferencia (PDF de imagen → OCR local)", () => {
     expect(await docs()).toHaveLength(1);
   }, 60_000);
 
+  it("transferencia entre cuentas Banamex (sin clave de rastreo): se registra por autorización y no se duplica", async () => {
+    const internal = () => {
+      const p = ocrPass("$750.00 MXN");
+      p.pages[0].text = p.pages[0].text.replace(/\nClave de rastreo .*/, "");
+      return p;
+    };
+    const ocr = fakeOcr([internal(), internal()]);
+    const r = await run(receiptPdf(), { ...deps(), ocr });
+    expect(r).toMatchObject({ kind: "transfer_receipt", status: "processed", registered: "inserted" });
+    const rows = await txs();
+    expect(rows).toMatchObject([{ cents: 75_000, kind: "expense" }]);
+    expect(rows[0].tracking_key).toMatch(/^AUT123456\d{8}$/);
+    // otro PDF de la misma operación → duplicado
+    const again = await run(receiptPdf({ concept: "Otra copia" }), { ...deps(), ocr });
+    expect(again).toMatchObject({ status: "processed", registered: "duplicate" });
+    expect(await txs()).toHaveLength(1);
+  }, 90_000);
+
   it("el mismo envío en un PDF distinto (otra huella) no duplica el gasto: manda la clave de rastreo", async () => {
     await run(receiptPdf(), { ...deps(), ocr: same() });
     const r = await run(receiptPdf({ concept: "Renta depa otra vez" }), { ...deps(), ocr: same() }); // otro archivo, mismo rastreo

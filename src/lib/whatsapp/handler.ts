@@ -17,6 +17,12 @@ export const MAX_AGE_MS = 48 * 3_600_000;
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 const MAX_TEXT_IN = 5000;
 
+/**
+ * "Compartir comprobante" de la app de Banamex manda DOS cosas: el PDF y, aparte, el texto del comprobante. El PDF es el que se registra;
+ * el texto (largo, con "Número de autorización", "Tips de seguridad"…) no es un gasto escrito a mano y contestarle "muy largo" solo estorba.
+ */
+const looksLikeReceiptText = (t: string) => t.length > 300 && /comprobante de la transacci[oó]n|no tiene validez como comprobante fiscal/i.test(t);
+
 /** Cuándo se ENVIÓ el mensaje (reloj de Meta/Telegram), sin dejar que un reloj adelantado lo ponga en el futuro (se recorta a `now`). */
 function sentAtOf(msg: InboundMessage, now: Date): Date {
   const t = Number(msg.timestamp) * 1000;
@@ -94,6 +100,7 @@ async function route(msg: InboundMessage, sender: Sender, io: WhatsAppIO, deps: 
   if (msg.type !== "text") return { reply: R.MEDIA_UNSUPPORTED, status: "ignored" };
 
   const text = String(msg.text ?? "").slice(0, MAX_TEXT_IN);
+  if (looksLikeReceiptText(text)) return { reply: "", status: "ignored" };
   const c: Ctx = base;
   const cmd = commandOf(text);
   if (cmd) return handleCommand(c, cmd);
@@ -119,6 +126,7 @@ export async function handleInbound(msg: InboundMessage, sender: Sender, io: Wha
   } catch (e) {
     console.error("[chat] no se pudo cerrar el mensaje:", ((e as Error)?.message ?? "").slice(0, 120));
   }
+  if (!out.reply) return;
   try {
     await io.sendText(replyAddress(msg), R.clip(out.reply));
   } catch {

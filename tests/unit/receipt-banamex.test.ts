@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixDigits, isGenericConcept, parseBanamexTransfer, transferConflicts, transferMerchant, type ParsedTransfer } from "@/lib/pdf/receipts/banamex-transfer";
+import { fixDigits, isDerivedKey, isGenericConcept, parseBanamexTransfer, transferConflicts, transferMerchant, type ParsedTransfer } from "@/lib/pdf/receipts/banamex-transfer";
 
 // Texto como lo entrega el OCR del comprobante de la app de Banamex (todo inventado).
 const page1 = (o: { amount?: string; status?: string; origin?: string; dest?: string; bank?: string; auth?: string; key?: string } = {}) => `Comprobante de transferencia
@@ -70,6 +70,21 @@ describe("comprobante de transferencia de Banamex", () => {
     expect([t.originLabel, t.originTail]).toEqual(["MiCuenta Banamex", "456"]);
     // sin ninguna cuenta antes del destino sigue siendo ilegible
     expect(parseBanamexTransfer(`${page1().replace("Cuenta origen\nMiCuenta Banamex **456\n", "")}\n${page2()}`)).toMatchObject({ kind: "unparsed" });
+  });
+
+  it("transferencia entre cuentas Banamex: sin etiqueta de rastreo se identifica por autorización + fecha", () => {
+    const noKey = page1().replace(/Clave de rastreo .*\n/, "");
+    const t = ok(noKey, page2());
+    expect(t.trackingKey).toBe("AUT12345620261114");
+    expect(isDerivedKey(t.trackingKey)).toBe(true);
+    expect(isDerivedKey("012345678901234567")).toBe(false);
+    expect(t.authCode).toBe("123456");
+    // la misma operación leída dos veces da la misma clave; otro día u otra autorización, otra
+    expect(ok(noKey, page2()).trackingKey).toBe(t.trackingKey);
+    expect(ok(page1({ auth: "654321" }).replace(/Clave de rastreo .*\n/, ""), page2()).trackingKey).not.toBe(t.trackingKey);
+    // ni rastreo ni autorización: no hay con qué identificarla
+    const neither = noKey.replace(/Número de autorización .*\n/, "");
+    expect(parseBanamexTransfer(`${neither}\n${page2()}`)).toMatchObject({ kind: "unparsed", reason: "no se encontró la clave de rastreo ni el número de autorización" });
   });
 
   it("no inventa lo que no se lee", () => {

@@ -1,5 +1,6 @@
 import { parseAmountToCents } from "@/lib/money";
 import { parseDateTime } from "@/lib/sources/banamex-email";
+import { localDate } from "@/lib/time";
 
 /**
  * Parser PURO del "Comprobante de transferencia" que genera la app de Banamex (PDF cuyo texto es imagen → llega por OCR).
@@ -21,6 +22,7 @@ export type ParsedTransfer = {
   destName: string | null;
   concept: string | null;
   reference: string | null;
+  /** Clave de rastreo SPEI; en una transferencia entre cuentas Banamex (sin rastreo) es una clave derivada, ver `derivedKey`. */
   trackingKey: string;
   authCode: string | null;
   accountType: string | null;
@@ -110,6 +112,12 @@ export function isGenericConcept(concept: string | null | undefined): boolean {
   return !c || /^(transferencia( interbancaria| spei| a terceros| entre cuentas| propia)?|pago( de servicios)?|traspaso|spei|varios|sin concepto|n a|ninguno)$/.test(c);
 }
 
+/** Prefijo de la clave derivada de una transferencia entre cuentas Banamex, que no trae clave de rastreo sino solo número de autorización. */
+export const DERIVED_KEY_PREFIX = "AUT";
+export const isDerivedKey = (key: string) => key.startsWith(DERIVED_KEY_PREFIX);
+/** AUT + autorización + fecha local (YYYYMMDD): identifica la operación igual que el rastreo, y cabe en las 8–30 letras/números de la columna. */
+const derivedKey = (authCode: string, at: Date) => `${DERIVED_KEY_PREFIX}${authCode}${localDate(at).replace(/-/g, "")}`;
+
 export function parseBanamexTransfer(text: string): TransferParse {
   const lines = toLines(text);
   const all = fold(lines.join("\n"));
@@ -140,10 +148,6 @@ export function parseBanamexTransfer(text: string): TransferParse {
     destName = (parts.length > 1 ? parts.slice(1).join(" - ") : bankName).replace(/\s*\*+\s*$/, "").trim().slice(0, 120) || null;
   }
 
-  const tracking = field(lines, /clave de rastreo/);
-  const trackingKey = tracking ? fixDigits(tracking.split(/\s{2,}/)[0]).replace(/[^A-Za-z0-9]/g, "").toUpperCase() : "";
-  if (!/^[A-Z0-9]{8,30}$/.test(trackingKey)) return { kind: "unparsed", reason: "clave de rastreo ilegible" };
-
   const authRaw = field(lines, /numero de autorizacion/);
   const auth = authRaw ? fixDigits(authRaw) : null;
   const authCode = auth && /^\d{3,12}$/.test(auth) ? auth : null;
@@ -151,6 +155,13 @@ export function parseBanamexTransfer(text: string): TransferParse {
   const whenRaw = field(lines, /fecha y hora/);
   const occurredAt = whenRaw ? parseDateTime(whenRaw) : null;
   if (!occurredAt) return { kind: "unparsed", reason: "fecha y hora ilegibles" };
+
+  // Una transferencia SPEI trae clave de rastreo. Entre cuentas Banamex el comprobante no la imprime (solo el número de autorización):
+  // si la etiqueta NO existe se identifica por autorización + fecha. Si la etiqueta existe pero no se lee, se pide revisión.
+  const tracking = field(lines, /clave de rastreo/);
+  let trackingKey = tracking ? fixDigits(tracking.split(/\s{2,}/)[0]).replace(/[^A-Za-z0-9]/g, "").toUpperCase() : "";
+  if (tracking === null && authCode) trackingKey = derivedKey(authCode, occurredAt);
+  if (!/^[A-Z0-9]{8,30}$/.test(trackingKey)) return { kind: "unparsed", reason: tracking === null ? "no se encontró la clave de rastreo ni el número de autorización" : "clave de rastreo ilegible" };
 
   const conceptRaw = field(lines, /^concepto/);
   const concept = conceptRaw && !/^referencia/i.test(fold(conceptRaw)) ? conceptRaw.slice(0, 120) : null;

@@ -33,6 +33,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Verificar que el paquete trae el OCR
+        run: node scripts/check-standalone.mjs
 
       - name: Empaquetar (standalone + estáticos)
         run: |
