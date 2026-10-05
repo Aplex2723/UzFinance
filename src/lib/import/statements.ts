@@ -123,7 +123,7 @@ const at = (date: string, time?: string | null) => new Date(`${date}T${time ?? "
 const dayDiff = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / dayMs;
 const shiftDay = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * dayMs).toISOString().slice(0, 10);
 
-function pickTarget(map: CardMap, key: string, tx: { holder?: string | null; section?: string | null; type?: string }): Target {
+export function pickTarget(map: CardMap, key: string, tx: { holder?: string | null; section?: string | null; type?: string }): Target {
   const m = map[key];
   if (!m) throw new Error(`Falta "${key}" en el mapa de tarjetas`);
   if (tx.holder && m.holders?.[tx.holder]) return m.holders[tx.holder];

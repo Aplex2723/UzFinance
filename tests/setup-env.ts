@@ -2,7 +2,7 @@ import { config } from "dotenv";
 
 // En local toma credenciales de .env; en CI vienen del entorno del workflow.
 config({ quiet: true });
-process.env.DB_NAME = "uzfinance_test";
+process.env.DB_NAME = process.env.TEST_DB_NAME ?? "uzfinance_test";
 process.env.DB_AUTH = "password";
 process.env.AUTH_MODE = "easyauth";
 process.env.ALLOWED_EMAIL = "uziel.francotorres@gmail.com";

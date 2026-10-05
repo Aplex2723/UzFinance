@@ -2,9 +2,13 @@ export class BodyTooLargeError extends Error {}
 
 /** Lee el body con tope duro de bytes, sin depender de Content-Length. */
 export async function readLimitedText(req: Request, maxBytes: number): Promise<string> {
+  return (await readLimitedBytes(req, maxBytes)).toString("utf8");
+}
+
+export async function readLimitedBytes(req: Request, maxBytes: number): Promise<Buffer> {
   const declared = Number(req.headers.get("content-length") ?? "0");
   if (declared > maxBytes) throw new BodyTooLargeError();
-  if (!req.body) return "";
+  if (!req.body) return Buffer.alloc(0);
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -18,5 +22,5 @@ export async function readLimitedText(req: Request, maxBytes: number): Promise<s
     }
     chunks.push(value);
   }
-  return Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks);
 }

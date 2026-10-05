@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { scheduleTransactionAlerts } from "@/lib/alerts/schedule";
 import { errorResponse, HttpError, json } from "@/lib/api";
 import { getEnv, parseNamedTokens } from "@/lib/env";
 import { ingestBankEmail, previewEmail } from "@/lib/repo/emails";
@@ -56,7 +57,10 @@ export async function POST(req: Request): Promise<Response> {
     // Solo valida y reporta cómo se interpretaría; no escribe nada.
     if (req.headers.get("x-dry-run") === "1") return json({ ...(await previewEmail(message)), dryRun: true });
 
-    return json(await ingestBankEmail(message));
+    const result = await ingestBankEmail(message);
+    // Alertas después de responder; fallar aquí nunca afecta la ingesta del correo.
+    if (result.status === "created" || result.status === "merged") scheduleTransactionAlerts(result.id);
+    return json(result);
   } catch (e) {
     if (e instanceof z.ZodError || e instanceof HttpError || e instanceof BodyTooLargeError) return errorResponse(e);
     // Nunca se registra el cuerpo del correo: solo el mensaje del error.

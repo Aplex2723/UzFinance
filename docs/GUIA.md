@@ -148,7 +148,43 @@ Requiere HTTPS (producción) y que `/manifest.webmanifest` y `/icons/*` estén e
    (total = monto × N). Un cargo diferido a meses futuros sin mensualidad (p. ej. “a pagar en octubre 2027”) no se importa como plan.
    Los depósitos “Inversión Perfiles” son ahorro para el departamento (meta en el inicio), no gasto.
 
-## 9. Trampas conocidas
+## 9. Documentos PDF, conciliación y alertas (Fase G)
+
+Entrada única: `processDocument` (`src/lib/docs/intake.ts`). Hoy la usa `POST /api/documents` (la app); el chat de WhatsApp (aún no
+construido) solo tendrá que llamarla con `origin: "whatsapp"`. **El PDF no se guarda**: solo su huella SHA-256 (subir dos veces el mismo
+archivo no repite nada) y lo extraído (`documents.extracted`). Estados: `processed`, `needs_review`, `rejected`, `failed` (se reprocesa al
+volver a subirlo).
+
+- **Comprobante de transferencia** (PDF de la app de Banamex: el texto es imagen). OCR **local** (tesseract.js + `@napi-rs/canvas`,
+  idioma español empaquetado en `node_modules`; nada sale del servidor) y **doble lectura** a dos resoluciones: si monto, rastreo,
+  autorización, fecha o cuentas no coinciden, o el monto no trae centavos completos, no se registra solo (`needs_review`). Un PDF con
+  texto se lee exacto. Solo transferencias *exitosas*; fechas futuras/muy viejas y montos > $1,000,000 piden confirmación.
+  - El CONCEPTO que escribes es el comercio (se categoriza con reglas → historial → Jev; si no, *Transferencias*). Con el concepto genérico
+    del banco queda “Transferencia a <alias>”. Hacia una tarjeta propia (Configuración → pagos a tarjetas) es `card_payment`.
+  - Dedupe por **clave de rastreo** (`transactions.tracking_key`, único). Si el correo del banco ya la registró (misma autorización, o
+    mismo monto a ≤15 min) se completa esa fila, y si el correo llega después solo la confirma. Origen `receipt`.
+  - La cuenta de origen (p. ej. MiCuenta ···283) se liga a una tarjeta por: cuenta aprendida (`app_settings.account_card_map`) → misma
+    terminación → único débito Banamex. Si es ambigua queda en revisión y puedes marcar “recordar”.
+- **Estado de cuenta** (Amex, Nu, Banamex crédito y débito; PDF con texto): extractores **deterministas** en TypeScript
+  (`src/lib/pdf/statements`, port de `scripts/statements/*.py`; `scripts/compare-statement-extractors.ts` los compara contra Python con
+  tus PDFs reales) con los **checks** de totales. Un PDF sin texto (imagen) o de otro banco se rechaza con la razón; no se usa OCR ni LLM para
+  cifras. El mapa estado→tarjeta (`app_settings.statement_card_map`, mismo formato que el importador) se propone solo cuando es
+  inequívoco (`src/lib/docs/card-suggest.ts`); si no, el documento espera que lo indiques.
+- **Conciliación** (`src/lib/recon`): empareja uno a uno por monto exacto y ±3 días (algoritmo húngaro), y reporta `missing_in_app`,
+  `not_in_statement`, `duplicate_suspect`, `amount_mismatch`, `total_mismatch` y `extraction_check_failed`. **Nunca modifica ni borra
+  movimientos**: tú decides (importar faltantes con `importMissing`, descartar, marcar resuelto). Los hallazgos son estables entre corridas
+  (`fingerprint`): lo que descartaste no reaparece y lo que deja de aplicar se resuelve solo. MSI: la compra completa ya está una vez en la
+  app; las mensualidades del estado se ignoran.
+- **Alertas** (`src/lib/alerts`): compra fuerte (≥ $5,000 o 3× lo típico del comercio/categoría), comercio nuevo caro, ritmo del mes
+  (+25 % vs. el mes pasado o proyección sobre el ingreso), pico del día, duplicado sospechoso, compras Banamex sin confirmar, meta de
+  ahorro, diferencias de estado y transferencias registradas. Umbrales y silencios editables (`app_settings.alerts_config`). No alertan
+  reembolsos, pagos de tarjeta ni movimientos de más de 3 días (importaciones masivas). `alert_outbox` deja lista la cola de **WhatsApp**
+  (apagada: `whatsapp.enabled=false`; nada se envía todavía).
+- **Despliegue:** la migración `009` va **a mano antes del push** (regla de firewall temporal; ver el runbook del README). `next.config.ts`
+  incluye en la traza el idioma del OCR, el worker y el WASM; el proxy admite cuerpos de hasta 14 MB. En el plan B1 el OCR corre de uno en
+  uno (≈3 s por comprobante) y libera su memoria a los 60 s de inactividad.
+
+## 10. Trampas conocidas
 
 - `sed -i` en macOS necesita `sed -i ''`. Los scripts temporales van al scratchpad, no a `/tmp`.
 - Cada migración SQL corre en un solo lote: DDL sobre columnas nuevas dentro de `EXEC('…')`.
@@ -156,3 +192,7 @@ Requiere HTTPS (producción) y que `/manifest.webmanifest` y `/icons/*` estén e
 - `DB_AUTH=token` (+ `AZURE_SQL_TOKEN`) existe solo para scripts de administración desde tu equipo; la app en Azure usa `msi`.
 - `resetDb()` de las pruebas borra planes antes que tarjetas (FK). Migraciones de Fase F: `006` (esquema) y `007` (categorías).
 - Cambiar App Settings reinicia la app unos segundos.
+- Las pruebas de integración recrean su base en cada corrida: para correr varias a la vez usa `TEST_DB_NAME=uzfinance_test_<x>`.
+- Las pruebas de OCR dibujan PDFs con `@napi-rs/canvas` (necesita alguna fuente del sistema; en Linux, p. ej. DejaVu). Un monto sin separador
+  de miles en una fuente negrita grande puede perder el punto: el parser lo rechaza (nunca lo interpreta), por eso las fixtures usan montos con coma.
+- `rule` es palabra reservada de T-SQL: entre corchetes (`[rule]`).

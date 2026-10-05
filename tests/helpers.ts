@@ -27,5 +27,5 @@ export const authed = (extra: Record<string, string> = {}) => ({ "x-ms-client-pr
 export const ctx = <P extends Record<string, string>>(p?: P) => ({ params: Promise.resolve((p ?? {}) as P) });
 
 export async function resetDb() {
-  await query("DELETE FROM dbo.unparsed_emails; DELETE FROM dbo.transactions; DELETE FROM dbo.installment_plans; DELETE FROM dbo.category_rules; DELETE FROM dbo.categories; DELETE FROM dbo.cards;");
+  await query("DELETE FROM dbo.alert_outbox; DELETE FROM dbo.alerts; DELETE FROM dbo.recon_findings; DELETE FROM dbo.recon_runs; DELETE FROM dbo.documents; DELETE FROM dbo.app_settings WHERE [key] <> 'monthly_income_cents'; DELETE FROM dbo.unparsed_emails; DELETE FROM dbo.transactions; DELETE FROM dbo.installment_plans; DELETE FROM dbo.category_rules; DELETE FROM dbo.categories; DELETE FROM dbo.cards;");
 }

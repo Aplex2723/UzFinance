@@ -5,6 +5,7 @@ import { parseBanamexEmail, type EmailInput, type ParsedEmailTx } from "@/lib/so
 import { localDate } from "@/lib/time";
 import { findCardByLast4, resolveBankCard, resolveDomiciliacionCard } from "./cards";
 import { listPayees } from "./payees";
+import { RECEIPT_MERGE_WINDOW_SECONDS } from "./transfers";
 import { MERGE_WINDOW_SECONDS } from "./transactions";
 
 export type EmailIngestResult =
@@ -63,6 +64,13 @@ export async function ingestBankEmail(m: EmailMessage, deps?: { categorizer?: Ca
   if (tx.card) ({ card, created } = await resolveBankCard(tx.card));
   else card = (tx.payeeCardDigits && (await findCardByLast4(tx.payeeCardDigits))) || (await resolveDomiciliacionCard());
 
+  // Comprobante (PDF) → correo: si el comprobante de la transferencia ya la registró, el correo solo la confirma.
+  const receipt = tx.kind === "expense" ? await mergeIntoReceipt(m.messageId, tx, card.id) : null;
+  if (receipt) {
+    await dropUnparsed(m.messageId);
+    return { status: "merged", id: receipt };
+  }
+
   if (tx.authCode) {
     const same = await query(
       "SELECT TOP 1 id FROM dbo.transactions WHERE auth_code=@a AND amount_cents=@amt AND occurred_date=@d AND kind=@k",
@@ -100,6 +108,31 @@ export async function ingestBankEmail(m: EmailMessage, deps?: { categorizer?: Ca
     return { status: "created", id: Number(r[0].id), cardCreated: created };
   } catch (e) {
     if (isUniqueViolation(e)) return { status: "duplicate" };
+    throw e;
+  }
+}
+
+/** Comprobante → correo: misma autorización o mismo monto a ≤15 min; la fila queda con las dos fuentes y el id del correo (así un reenvío no duplica). */
+async function mergeIntoReceipt(messageId: string, tx: ParsedEmailTx, cardId: number): Promise<number | null> {
+  const cand = await query<{ id: number }>(
+    `SELECT TOP 1 id FROM dbo.transactions
+     WHERE source='receipt' AND email_message_id IS NULL AND kind='expense' AND amount_cents=@a
+       AND ((@auth IS NOT NULL AND auth_code=@auth)
+            OR (card_id=@card AND ABS(DATEDIFF(second, occurred_at, @at)) <= @win AND (auth_code IS NULL OR @auth IS NULL)))
+     ORDER BY CASE WHEN auth_code=@auth THEN 0 ELSE 1 END, ABS(DATEDIFF(second, occurred_at, @at)), id`,
+    { a: t.big(tx.amountCents), auth: t.varchar(tx.authCode), at: t.dt(tx.occurredAt), win: t.int(RECEIPT_MERGE_WINDOW_SECONDS), card: t.int(cardId) },
+  );
+  if (!cand[0]) return null;
+  const id = Number(cand[0].id);
+  try {
+    const r = await query(
+      `UPDATE dbo.transactions SET email_message_id=@mid, sources=LEFT(sources + ',email', 40), auth_code=COALESCE(auth_code, @auth), account_ref=COALESCE(account_ref, @acct)
+       OUTPUT INSERTED.id WHERE id=@id AND email_message_id IS NULL`,
+      { id: t.big(id), mid: t.varchar(messageId), auth: t.varchar(tx.authCode), acct: t.varchar(tx.accountRef) },
+    );
+    return r.length ? id : null;
+  } catch (e) {
+    if (isUniqueViolation(e)) return null;
     throw e;
   }
 }

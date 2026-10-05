@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { CommandPalette } from "./CommandPalette";
-import { ALL_ITEMS, NAV } from "./nav";
+import { ALL_ITEMS, NAV, type NavBadges } from "./nav";
 
 function Logo() {
   return (
@@ -17,7 +17,23 @@ function Logo() {
   );
 }
 
-function SideNav({ onNavigate }: { onNavigate?: () => void }) {
+/** Insignia numérica accesible: el número se lee con su significado. */
+function Badge({ n, label, active }: { n: number; label: string; active?: boolean }) {
+  if (n <= 0) return null;
+  return (
+    <span
+      className={`num ml-auto inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-[18px] ${active ? "bg-white/25 text-white" : "bg-accent text-white"}`}
+      data-testid="nav-badge"
+    >
+      <span aria-hidden>{n > 99 ? "99+" : n}</span>
+      <span className="sr-only">{n} {label}</span>
+    </span>
+  );
+}
+
+const BADGE_LABEL: Record<string, string> = { "/documentos": "por revisar", "/alertas": "sin leer" };
+
+function SideNav({ onNavigate, badges }: { onNavigate?: () => void; badges: NavBadges }) {
   const path = usePathname();
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   return (
@@ -36,6 +52,7 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
                 >
                   <Icon size={15} aria-hidden />
                   {label}
+                  <Badge n={badges[href] ?? 0} label={BADGE_LABEL[href] ?? ""} active={active(href)} />
                 </Link>
               </li>
             ))}
@@ -54,7 +71,7 @@ const TABS: { href: string; label: string; icon: LucideIcon }[] = [
 ];
 
 /** Barra inferior para el celular: lo más usado a un pulgar de distancia. */
-function BottomNav({ onMore }: { onMore: () => void }) {
+function BottomNav({ onMore, moreBadge }: { onMore: () => void; moreBadge: number }) {
   const path = usePathname();
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const item = "flex h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[10px] transition-colors";
@@ -70,8 +87,11 @@ function BottomNav({ onMore }: { onMore: () => void }) {
           </li>
         ))}
         <li className="flex flex-1">
-          <button type="button" onClick={onMore} className={`${item} text-muted`} aria-label="Más opciones">
-            <MoreHorizontal size={20} aria-hidden />
+          <button type="button" onClick={onMore} className={`${item} text-muted`} aria-label={moreBadge > 0 ? `Más opciones (${moreBadge} pendientes)` : "Más opciones"}>
+            <span className="relative">
+              <MoreHorizontal size={20} aria-hidden />
+              {moreBadge > 0 && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-bg" data-testid="more-badge" aria-hidden />}
+            </span>
             Más
           </button>
         </li>
@@ -80,7 +100,7 @@ function BottomNav({ onMore }: { onMore: () => void }) {
   );
 }
 
-export function AppShell({ children, userEmail }: { children: ReactNode; userEmail: string }) {
+export function AppShell({ children, userEmail, badges = {} }: { children: ReactNode; userEmail: string; badges?: NavBadges }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   const current = ALL_ITEMS.find((i) => (i.href === "/" ? path === "/" : path.startsWith(i.href)));
@@ -91,7 +111,7 @@ export function AppShell({ children, userEmail }: { children: ReactNode; userEma
       <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 flex-col justify-between border-r border-line bg-black/30 p-4 backdrop-blur lg:flex">
         <div className="flex flex-col gap-7">
           <Logo />
-          <SideNav />
+          <SideNav badges={badges} />
         </div>
         <p className="truncate px-3 text-[11px] text-faint" title={userEmail}>{userEmail}</p>
       </aside>
@@ -102,7 +122,7 @@ export function AppShell({ children, userEmail }: { children: ReactNode; userEma
           <button className="absolute inset-0 bg-black/70" aria-label="Cerrar menú" onClick={() => setOpen(false)} />
           <div className="glass absolute inset-y-0 left-0 flex w-[260px] flex-col gap-7 rounded-l-none p-4">
             <Logo />
-            <SideNav onNavigate={() => setOpen(false)} />
+            <SideNav onNavigate={() => setOpen(false)} badges={badges} />
           </div>
         </div>
       )}
@@ -121,7 +141,7 @@ export function AppShell({ children, userEmail }: { children: ReactNode; userEma
         </header>
         <main className="mx-auto w-full max-w-[1280px] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 lg:pb-5">{children}</main>
       </div>
-      <BottomNav onMore={() => setOpen(true)} />
+      <BottomNav onMore={() => setOpen(true)} moreBadge={Object.values(badges).reduce<number>((a, n) => a + (n ?? 0), 0)} />
     </div>
   );
 }

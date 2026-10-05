@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import { IncomeEditor } from "@/components/IncomeEditor";
 import { PayeesManager } from "@/components/PayeesManager";
@@ -47,6 +48,13 @@ export default async function Page() {
           <code className="block break-all rounded-lg bg-black/40 p-2.5">{proto}://{host}/api/ingest</code>
           <p className="mt-3 text-muted">Header: <code className="text-fg">Authorization: Bearer &lt;INGEST_TOKEN&gt;</code></p>
           <p className="mt-3 text-[11px] text-muted">El token nunca se muestra aquí. Se guarda como app setting y se rota con el procedimiento del README (sección “Rotación del token”).</p>
+        </Panel>
+        <Panel title="Alertas y documentos">
+          <p className="mb-3 text-muted">Ajusta cuándo te avisa la app (montos, reglas, comercios silenciados, horas de silencio) y a qué tarjeta corresponde cada estado de cuenta que subes.</p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/alertas" className="btn !h-10" data-testid="link-alert-settings">Configurar alertas</Link>
+            <Link href="/documentos" className="btn !h-10">Documentos PDF</Link>
+          </div>
         </Panel>
         <PayeesManager payees={payees} />
       </div>

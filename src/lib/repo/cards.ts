@@ -13,6 +13,11 @@ export async function listCards(includeInactive = false): Promise<Card[]> {
   return rows.map(map);
 }
 
+export async function getCard(id: number): Promise<Card | null> {
+  const rows = await query<Row>(`SELECT ${COLS} FROM dbo.cards WHERE id=@id`, { id: t.int(id) });
+  return rows[0] ? map(rows[0]) : null;
+}
+
 export type CardInput = Pick<Card, "name" | "issuer" | "last4" | "aliases" | "color"> & { art?: Card["art"]; active?: boolean };
 
 export async function createCard(c: CardInput): Promise<Card> {

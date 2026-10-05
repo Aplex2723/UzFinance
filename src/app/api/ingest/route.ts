@@ -1,4 +1,5 @@
 import { errorResponse, HttpError, ingestEnv, json } from "@/lib/api";
+import { scheduleTransactionAlerts } from "@/lib/alerts/schedule";
 import { getCategorizer } from "@/lib/categorizer";
 import { ingestTransaction } from "@/lib/repo/transactions";
 import { BodyTooLargeError, readLimitedText } from "@/lib/security/body";
@@ -17,7 +18,7 @@ function tooMany(ip: string) {
   return json({ error: "Demasiadas solicitudes" }, 429, { "Retry-After": String(failures.retryAfterSeconds(ip)) });
 }
 
-export async function POST(req: Request): Promise<Response> {
+async function handle(req: Request): Promise<Response> {
   const ip = clientIp(req.headers);
   if (failures.blocked(ip) || !perIp.hit(ip)) return tooMany(ip);
 
@@ -52,6 +53,8 @@ export async function POST(req: Request): Promise<Response> {
     if (req.headers.get("x-dry-run") === "1") return json({ status: "ok", dryRun: true });
 
     const result = await ingestTransaction(raw, "shortcut", { categorizer: await getCategorizer() });
+    // Alertas (compra fuerte, etc.) después de responder; si fallan, la ingesta ya terminó bien.
+    if (result.status !== "duplicate") scheduleTransactionAlerts(result.id);
     return json(result.status === "duplicate"
       ? { status: "duplicate", cardMatched: result.cardMatched }
       : { status: result.status, id: result.id, cardMatched: result.cardMatched });
@@ -61,4 +64,13 @@ export async function POST(req: Request): Promise<Response> {
     console.error("[ingest] fallo:", (e as Error)?.message);
     return json({ error: "Servicio no disponible, reintenta" }, 503, { "Retry-After": "30" });
   }
+}
+
+// Una línea por solicitud (sin token ni cuerpo) para saber si los toques de Wallet llegan al servidor.
+export async function POST(req: Request): Promise<Response> {
+  const t0 = Date.now();
+  const res = await handle(req);
+  const ua = (req.headers.get("user-agent") ?? "-").replace(/[^\w ./;()-]/g, "").slice(0, 60);
+  console.log(`[ingest] status=${res.status} ms=${Date.now() - t0} ua=${ua}`);
+  return res;
 }

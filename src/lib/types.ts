@@ -1,6 +1,6 @@
 export type CardArtId = "amex-platinum" | "banamex-explora" | "banamex-clasica" | "banamex-costco" | "banamex-debito" | "nu" | "generic";
 export type Issuer = "amex" | "banamex" | "nu" | "other";
-export type Source = "shortcut" | "email" | "statement" | "manual";
+export type Source = "shortcut" | "email" | "statement" | "manual" | "receipt";
 
 export type Card = {
   id: number;

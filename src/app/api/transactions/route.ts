@@ -1,3 +1,4 @@
+import { scheduleTransactionAlerts } from "@/lib/alerts/schedule";
 import { json, parseQuery, protectedRoute, readJson } from "@/lib/api";
 import { createManual, listTransactions } from "@/lib/repo/transactions";
 import { listQuery, transactionSchema } from "@/lib/schemas";
@@ -14,5 +15,6 @@ export const POST = protectedRoute(async ({ req }) => {
   const b = await readJson(req, transactionSchema);
   const r = await createManual({ occurredAt: new Date(b.date), amountCents: b.amount, merchant: b.merchant, cardId: b.card_id, categoryId: b.category_id, notes: b.notes });
   if (r.status === "duplicate") throw new HttpError(409, "Ya existe un movimiento idéntico");
+  if (r.status === "inserted") scheduleTransactionAlerts(r.id);
   return json(r, 201);
 });

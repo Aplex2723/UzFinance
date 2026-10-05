@@ -1,5 +1,6 @@
 "use client";
-import { Plus, Sparkles, Upload } from "lucide-react";
+import { Bell, FileUp, Plus, Sparkles, Upload } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiFetch, emit, EVENTS } from "@/lib/client";
@@ -23,6 +24,8 @@ export function DashboardActions() {
       <button className="btn btn-primary" onClick={() => emit(EVENTS.addExpense)}><Plus size={14} aria-hidden /> Agregar gasto</button>
       <button className="btn" onClick={() => emit(EVENTS.importCsv)}><Upload size={13} aria-hidden /> Importar CSV</button>
       <button className="btn" onClick={categorize} disabled={busy}><Sparkles size={13} aria-hidden /> {busy ? "Categorizando…" : "Categorizar"}</button>
+      <Link href="/documentos" className="btn" data-testid="quick-upload-pdf"><FileUp size={13} aria-hidden /> Subir PDF</Link>
+      <Link href="/alertas" className="btn" data-testid="quick-alerts"><Bell size={13} aria-hidden /> Alertas</Link>
       {msg && <span role="status" className="text-[11px] text-muted">{msg}</span>}
     </div>
   );
