@@ -17,7 +17,9 @@ test.describe("documentos y alertas", () => {
   test("/alertas carga la lista y la configuración, y valida montos antes de guardar", async ({ page }) => {
     await page.goto("/alertas");
     await expect(page.getByRole("heading", { name: "Alertas", level: 1 })).toBeVisible();
-    await expect(page.getByTestId("whatsapp-note")).toHaveText("Aún no se envían mensajes: esto solo deja listos los avisos.");
+    await expect(page.getByTestId("whatsapp-note")).toContainText("Apagado: requiere plantillas aprobadas por Meta.");
+    await expect(page.getByTestId("telegram-note")).toHaveText("Los avisos llegan al chat privado de cada persona autorizada con el bot de Telegram (gratis). Cada persona debe haberle escrito al bot al menos una vez.");
+    await expect(page.getByTestId("telegram-enabled")).not.toBeChecked(); // apagado por omisión: se enciende a propósito
     await page.locator("#a-largePurchaseCents").fill("abc");
     await page.getByTestId("settings-save").click();
     await expect(page.getByRole("alert").first()).toBeVisible();

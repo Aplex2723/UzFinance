@@ -12,6 +12,7 @@ describe("parseAlertConfig (lectura tolerante)", () => {
     expect(c.largePurchaseCents).toBe(500_000);
     expect(c.largeVsTypicalFactor).toBe(3);
     expect(c.whatsapp).toEqual({ enabled: false, minSeverity: "warn" });
+    expect(c.telegram).toEqual({ enabled: false, minSeverity: "warn" });
     expect(Object.keys(c.enabled).sort()).toEqual([...ALERT_RULES].sort());
     expect(Object.values(c.enabled).every(Boolean)).toBe(true);
   });
@@ -43,6 +44,34 @@ describe("parseAlertConfig (lectura tolerante)", () => {
   });
 });
 
+describe("telegram en la configuración", () => {
+  it("una configuración guardada ANTES de existir `telegram` lo lee apagado, con el resto intacto", () => {
+    const c = parseAlertConfig(JSON.stringify({ largePurchaseCents: 700_000, whatsapp: { enabled: true, minSeverity: "high" } }));
+    expect(c.telegram).toEqual({ enabled: false, minSeverity: "warn" });
+    expect(c.whatsapp).toEqual({ enabled: true, minSeverity: "high" });
+    expect(c.largePurchaseCents).toBe(700_000);
+  });
+  it("tolerante: campos malos caen a su default y los buenos se conservan; `telegram` corrupto entero = defaults", () => {
+    expect(parseAlertConfig({ telegram: { enabled: true, minSeverity: "urgente" } }).telegram).toEqual({ enabled: true, minSeverity: "warn" });
+    expect(parseAlertConfig({ telegram: { enabled: "sí", minSeverity: "high" } }).telegram).toEqual({ enabled: false, minSeverity: "high" });
+    for (const bad of [null, 7, "x", [], true]) expect(parseAlertConfig({ telegram: bad }).telegram).toEqual({ enabled: false, minSeverity: "warn" });
+  });
+  it("el parche es parcial y no toca WhatsApp (ni al revés)", () => {
+    const a = applyAlertConfigPatch(DEFAULT_ALERT_CONFIG, { telegram: { enabled: true } });
+    expect(a.telegram).toEqual({ enabled: true, minSeverity: "warn" });
+    expect(a.whatsapp).toEqual(DEFAULT_ALERT_CONFIG.whatsapp);
+    const b = applyAlertConfigPatch(a, { telegram: { minSeverity: "high" }, whatsapp: { enabled: true } });
+    expect(b.telegram).toEqual({ enabled: true, minSeverity: "high" });
+    expect(b.whatsapp).toEqual({ enabled: true, minSeverity: "warn" });
+  });
+  it("devuelve copias: mutar el resultado no contamina los defaults", () => {
+    const c = parseAlertConfig({});
+    c.telegram.enabled = true;
+    expect(DEFAULT_ALERT_CONFIG.telegram.enabled).toBe(false);
+    expect(parseAlertConfig({}).telegram.enabled).toBe(false);
+  });
+});
+
 describe("applyAlertConfigPatch (escritura estricta)", () => {
   const cur = DEFAULT_ALERT_CONFIG;
   it("parche parcial se mezcla sin perder lo demás (incluso anidado)", () => {
@@ -64,6 +93,9 @@ describe("applyAlertConfigPatch (escritura estricta)", () => {
     ["clave desconocida", { hackeo: true }],
     ["regla desconocida", { enabled: { nope: true } }],
     ["severidad inválida", { whatsapp: { minSeverity: "x" } }],
+    ["severidad de Telegram inválida", { telegram: { minSeverity: "x" } }],
+    ["Telegram: interruptor no booleano", { telegram: { enabled: "sí" } }],
+    ["Telegram: clave desconocida", { telegram: { token: "x" } }],
     ["hora inválida", { quietHours: { start: "25:00" } }],
     ["muted no numérico", { mutedCategoryIds: [1, "a"] }],
     ["muted negativo", { mutedCategoryIds: [-1] }],

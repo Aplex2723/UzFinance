@@ -160,8 +160,8 @@ describe("lo que NUNCA alerta como gasto", () => {
     await setAlertConfig({ enabled: { large_purchase: false, new_merchant_large: false } });
     expect(await ev(await mk({ cents: 20_000_00 }))).toBe(0);
   });
-  it("cargo recurrente (mismo comercio y monto ±5 % el mes anterior) baja a info y no se encola en WhatsApp", async () => {
-    await setAlertConfig({ whatsapp: { enabled: true } });
+  it("cargo recurrente (mismo comercio y monto ±5 % el mes anterior) baja a info y no se encola en WhatsApp ni en Telegram", async () => {
+    await setAlertConfig({ whatsapp: { enabled: true }, telegram: { enabled: true, minSeverity: "warn" } });
     await mk({ date: "2026-09-04", cents: 12_000_00, merchant: "RENTA DEPTO" });
     const id = await mk({ cents: 12_300_00, merchant: "RENTA DEPTO" });
     expect(await ev(id)).toBe(1);
@@ -340,6 +340,23 @@ describe("evaluación periódica", () => {
     expect(a).toMatchObject({ rule: "unconfirmed", severity: "info" });
     expect(a.title).toBe("2 compras sin confirmar por el banco");
     expect(await evaluatePeriodicAlerts(NOW)).toBe(0);
+  });
+  it("sin confirmar también cuenta lo tecleado en el chat (WhatsApp/Telegram, con o sin fecha, con o sin Atajo) mientras no haya correo", async () => {
+    await mk({ date: "2026-10-02", cents: 100_00, merchant: "CHAT WA", sources: "whatsapp", card: banamex });
+    await mk({ date: "2026-10-02", cents: 110_00, merchant: "CHAT TG", sources: "telegram", card: banamex });
+    await mk({ date: "2026-10-02", cents: 120_00, merchant: "CHAT FECHA WA", sources: "whatsapp-d", card: banamex });
+    await mk({ date: "2026-10-02", cents: 130_00, merchant: "CHAT FECHA TG", sources: "telegram-d", card: banamex });
+    await mk({ date: "2026-10-02", cents: 140_00, merchant: "CHAT + ATAJO", sources: "whatsapp,shortcut", card: banamex });
+    await mk({ date: "2026-10-02", cents: 150_00, merchant: "TG + ATAJO", sources: "telegram,shortcut", card: banamex });
+    await mk({ date: "2026-10-02", cents: 900_00, merchant: "CHAT CONFIRMADO", sources: "whatsapp,email", card: banamex }); // el correo ya lo confirmó
+    await mk({ date: "2026-10-02", cents: 910_00, merchant: "TG ATAJO CORREO", sources: "telegram,shortcut,email", card: banamex });
+    await mk({ date: "2026-10-02", cents: 920_00, merchant: "CHAT OTRA TARJETA", sources: "telegram", card }); // no es Banamex
+    await mk({ date: "2026-10-04", at: "2026-10-04T17:00:00Z", cents: 930_00, merchant: "CHAT RECIENTE", sources: "whatsapp", card: banamex }); // <24 h
+    expect(await evaluatePeriodicAlerts(NOW)).toBe(1);
+    const a = (await alerts())[0];
+    expect(a).toMatchObject({ rule: "unconfirmed", severity: "warn" });
+    expect(a.title).toBe("6 compras sin confirmar por el banco");
+    expect(a.data).toMatchObject({ count: 6, totalCents: 750_00 });
   });
   it("maybeRunPeriodicAlerts: estrangulado a 15 min", async () => {
     await mk({ date: "2026-10-02", cents: 300_00, merchant: "OXXO", sources: "shortcut", card: banamex });

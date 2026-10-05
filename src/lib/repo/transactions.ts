@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
+import { SQL as CHAT_SQL } from "@/lib/chat-sources";
 import { getCategorizer, type Categorization, type Categorizer } from "@/lib/categorizer";
 import { isUniqueViolation, query, t } from "@/lib/db/pool";
 import { normalizeMerchant } from "@/lib/merchant";
 import type { RawTransaction } from "@/lib/sources/types";
 import { localDate } from "@/lib/time";
 import type { Source, Transaction } from "@/lib/types";
-import { resolveCard } from "./cards";
+import { getCard, resolveCard } from "./cards";
 import { listCategories } from "./categories";
 
 const SELECT = `
@@ -14,7 +15,7 @@ const SELECT = `
          x.card_id, c.name AS card_name, c.issuer, x.category_id, k.name AS category_name, k.color AS category_color,
          x.source, x.notes, x.kind, x.is_recurring, x.sources, x.auth_code, x.account_ref,
          x.category_source, CAST(x.category_confidence AS float) AS category_confidence, x.plan_id,
-         CAST(CASE WHEN c.issuer = 'banamex' AND x.kind = 'expense' AND x.sources = 'shortcut'
+         CAST(CASE WHEN c.issuer = 'banamex' AND x.kind = 'expense' AND ${CHAT_SQL.unconfirmed("x")}
                     AND x.occurred_at < DATEADD(hour, -24, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS bit) AS unconfirmed
   FROM dbo.transactions x
   JOIN dbo.cards c ON c.id = x.card_id
@@ -93,7 +94,8 @@ export async function ingestTransaction(
   deps: { categorizer: Categorizer; categoryIdsByName?: Map<string, number>; /** El llamador ya comparó contra lo existente (importador de estados). */ skipStatementMatch?: boolean },
 ): Promise<IngestResult> {
   const merchantNormalized = normalizeMerchant(raw.merchant);
-  const { card, matched } = await resolveCard(raw.cardRef);
+  const byId = raw.cardId ? await getCard(raw.cardId) : null;
+  const { card, matched } = byId ? { card: byId, matched: true } : await resolveCard(raw.cardRef);
   const hash = dedupeHash({ cardId: card.id, occurredAt: raw.occurredAt, cents: raw.amountCents, merchantNormalized, source, seq: raw.seq });
   const occurredDate = localDate(raw.occurredAt);
 
@@ -120,6 +122,29 @@ export async function ingestTransaction(
       }
       await query("UPDATE dbo.transactions SET sources = LEFT(sources + ',shortcut', 40) WHERE id=@id", { id: t.big(id) });
       return { status: "merged", id, cardMatched: matched };
+    }
+
+    // Chat → Atajo: lo que se tecleó por WhatsApp o Telegram (con la hora del mensaje) y luego llega por Wallet no se duplica; el Atajo
+    // solo se anota como segunda fuente. Las filas de chat con fecha explícita (hora artificial) no se funden.
+    const typed = await query<{ id: number }>(
+      `SELECT TOP 1 id FROM dbo.transactions
+       WHERE card_id=@c AND amount_cents=@a AND kind='expense' AND email_message_id IS NULL AND sources IN (${CHAT_SQL.mergeableChat})
+         AND ABS(DATEDIFF(second, occurred_at, @at)) <= @win
+       ORDER BY ABS(DATEDIFF(second, occurred_at, @at)), id`,
+      { c: t.int(card.id), a: t.big(raw.amountCents), at: t.dt(raw.occurredAt), win: t.int(MERGE_WINDOW_SECONDS) },
+    );
+    if (typed[0]) {
+      const id = Number(typed[0].id);
+      try {
+        await query("INSERT dbo.merged_hashes (hash, tx_id) VALUES (@h, @id)", { h: t.char(hash), id: t.big(id) });
+      } catch (e) {
+        if (isUniqueViolation(e)) return { status: "duplicate", cardMatched: matched };
+        throw e;
+      }
+      const upd = await query(`UPDATE dbo.transactions SET sources = LEFT(sources + ',shortcut', 40) OUTPUT INSERTED.id WHERE id=@id AND sources IN (${CHAT_SQL.mergeableChat})`, { id: t.big(id) });
+      if (upd.length) return { status: "merged", id, cardMatched: matched };
+      // Otro proceso la modificó entre la consulta y la fusión: se retira la huella y se inserta normal.
+      await query("DELETE dbo.merged_hashes WHERE hash=@h", { h: t.char(hash) });
     }
   }
 
@@ -151,12 +176,12 @@ export async function ingestTransaction(
     const r = await query<{ id: number }>(
       `INSERT dbo.transactions (occurred_at, occurred_date, amount_cents, merchant_raw, merchant_normalized, card_id, category_id, category_source, category_confidence, plan_id, kind, source, sources, dedupe_hash, notes)
        OUTPUT INSERTED.id
-       VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, @csrc, @cconf, @plan, @kind, @src, @src, @hash, @notes)`,
+       VALUES (@at, @date, @amt, @raw, @norm, @card, @cat, @csrc, @cconf, @plan, @kind, @src, @srcs, @hash, @notes)`,
       {
         at: t.dt(raw.occurredAt), date: t.date(occurredDate), amt: t.big(raw.amountCents),
         raw: t.str(raw.merchant), norm: t.str(merchantNormalized), card: t.int(card.id), cat: t.int(categoryId),
         csrc: t.varchar(cat?.source ?? null), cconf: t.dec(cat?.confidence ?? null), plan: t.int(raw.planId ?? null), kind: t.varchar(kind),
-        src: t.varchar(source), hash: t.char(hash), notes: t.str(notes),
+        src: t.varchar(source), srcs: t.varchar((raw.sourcesTag ?? source).slice(0, 40)), hash: t.char(hash), notes: t.str(notes),
       },
     );
     return { status: "inserted", id: Number(r[0].id), cardMatched: matched, categoryId };

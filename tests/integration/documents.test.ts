@@ -3,7 +3,7 @@ import { POST as upload, GET as listDocs } from "@/app/api/documents/route";
 import { POST as confirm } from "@/app/api/documents/[id]/confirm/route";
 import { RulesCategorizer } from "@/lib/categorizer/rules";
 import { IntakeError, processDocument } from "@/lib/docs/intake";
-import { closePool, query } from "@/lib/db/pool";
+import { closePool, query, t } from "@/lib/db/pool";
 import { OcrError, type OcrResult } from "@/lib/pdf/ocr";
 import { createCard } from "@/lib/repo/cards";
 import { createCategory } from "@/lib/repo/categories";
@@ -306,5 +306,21 @@ describe("POST /api/documents", () => {
     const bytes = new Uint8Array(await big.arrayBuffer());
     const res = await post(bytes, { ...authed(), "content-length": String(bytes.length) }, ct);
     expect(res.status).toBe(413);
+  });
+});
+
+describe("migración 010: origen 'telegram' y marca real de deshecho", () => {
+  it("un PDF recibido por Telegram se guarda con origin 'telegram'; un origen desconocido lo rechaza la base", async () => {
+    const r = await processDocument({ bytes: receiptPdf(), origin: "telegram" }, { ...deps(), ocr: same() });
+    expect(r.documentId).toBeGreaterThan(0);
+    expect((await query<{ origin: string }>("SELECT origin FROM dbo.documents WHERE id=@id", { id: t.int(r.documentId) }))[0].origin).toBe("telegram");
+    await expect(query("UPDATE dbo.documents SET origin='sms'")).rejects.toThrow();
+    for (const o of ["app", "whatsapp", "telegram"]) await query(`UPDATE dbo.documents SET origin='${o}'`);
+  });
+  it("whatsapp_messages.undone nace en 0 y seq crece con la llegada", async () => {
+    await query("INSERT dbo.whatsapp_messages (msg_id, wa_id, kind) VALUES ('m1','tg1','text'), ('m2','tg1','text')");
+    const rows = await query<{ msg_id: string; undone: boolean; seq: number }>("SELECT msg_id, undone, seq FROM dbo.whatsapp_messages ORDER BY msg_id");
+    expect(rows.map((x) => x.undone)).toEqual([false, false]);
+    expect(Number(rows[1].seq)).toBeGreaterThan(Number(rows[0].seq));
   });
 });

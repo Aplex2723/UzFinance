@@ -4,8 +4,10 @@ import {
   dailySpikeCandidate, duplicateCandidate, goalCandidate, isDuplicatePair, isMuted, isAlertableExpense, largeAlertCandidate, paceCandidate,
   PACE_PROJECTION_MIN_DAY, unconfirmedCandidate, type TxFacts, type TxHistory,
 } from "@/lib/alerts/rules";
+import { scheduleAlertWork } from "@/lib/alerts/background";
 import { clampBody, clampTitle, shortHash, whatsappText } from "@/lib/alerts/text";
 import { isSeverity, MAX_NEW_ALERTS_PER_RUN, SEVERITY_RANK, type AlertCandidate, type AlertRow, type AlertRule } from "@/lib/alerts/types";
+import { SQL as CHAT_SQL } from "@/lib/chat-sources";
 import { isUniqueViolation, query, t } from "@/lib/db/pool";
 import { goalProgress } from "@/lib/goals";
 import { currentMonth, localDate } from "@/lib/time";
@@ -59,7 +61,9 @@ async function groupRank(prefix: string): Promise<number> {
   return rows.reduce((m, r) => Math.max(m, SEVERITY_RANK[r.severity] ?? 0), 0);
 }
 
-async function insertAlert(c: AlertCandidate, cfg: AlertConfig, group?: string): Promise<{ created: boolean; id?: number }> {
+type Inserted = { created: boolean; id?: number; telegram?: boolean };
+
+async function insertAlert(c: AlertCandidate, cfg: AlertConfig, group?: string): Promise<Inserted> {
   if (!/^[a-z][a-z_]{0,29}$/.test(c.rule)) throw new RangeError("regla inválida");
   if (!isSeverity(c.severity)) throw new RangeError("severidad inválida");
   let key = String(c.dedupeKey ?? "").trim();
@@ -102,20 +106,39 @@ async function insertAlert(c: AlertCandidate, cfg: AlertConfig, group?: string):
     throw e;
   }
 
-  // Cola de WhatsApp: solo si está activado y la severidad alcanza el mínimo. Nada se envía aquí.
-  if (cfg.whatsapp.enabled && SEVERITY_RANK[c.severity] >= SEVERITY_RANK[cfg.whatsapp.minSeverity]) {
+  // Colas de avisos: un canal solo si está activado y la severidad alcanza su mínimo. Nada se envía aquí (lo hace el emisor del canal).
+  const queued: Record<OutboxChannel, boolean> = { whatsapp: false, telegram: false };
+  for (const channel of ["whatsapp", "telegram"] as const) {
+    const ch = cfg[channel];
+    if (!ch.enabled || SEVERITY_RANK[c.severity] < SEVERITY_RANK[ch.minSeverity]) continue;
     try {
-      await query("INSERT dbo.alert_outbox (alert_id, channel) VALUES (@id, 'whatsapp')", { id: t.big(id) });
+      await query("INSERT dbo.alert_outbox (alert_id, channel) VALUES (@id, @ch)", { id: t.big(id), ch: t.varchar(channel) });
+      queued[channel] = true;
     } catch (e) {
-      if (!isUniqueViolation(e)) warn("no se pudo encolar en alert_outbox", e);
+      if (!isUniqueViolation(e)) warn(`no se pudo encolar en alert_outbox (${channel})`, e);
     }
   }
-  return { created: true, id };
+  return { created: true, id, telegram: queued.telegram };
+}
+
+type OutboxChannel = "whatsapp" | "telegram";
+
+/** Manda lo pendiente de Telegram. Import diferido: el emisor lee la configuración de este módulo (evita el ciclo). Nunca lanza. */
+export async function flushTelegram(now?: Date): Promise<void> {
+  try {
+    const { flushTelegramOutbox } = await import("@/lib/alerts/telegram-sender");
+    await flushTelegramOutbox({ now });
+  } catch (e) {
+    warn("flushTelegram", e);
+  }
 }
 
 /** Crea una alerta (idempotente por `dedupe_key`). Respeta reglas apagadas y comercios/categorías silenciados. */
 export async function createAlert(c: AlertCandidate): Promise<{ created: boolean; id?: number }> {
-  return insertAlert(c, await getAlertConfig());
+  const r = await insertAlert(c, await getAlertConfig());
+  // El aviso por Telegram sale tras la respuesta (best effort: un fallo de red no rompe esto ni lo retrasa).
+  if (r.telegram) scheduleAlertWork(() => flushTelegram());
+  return { created: r.created, id: r.id };
 }
 
 /** Freno global contra inundaciones (un bug, una importación): las evaluaciones automáticas no crean más de esto por hora. */
@@ -253,11 +276,11 @@ async function checkDailySpike(cfg: AlertConfig, today: string, budget: Budget) 
 // ── Evaluación periódica ────────────────────────────────────────────────────────
 
 async function checkUnconfirmed(cfg: AlertConfig, now: Date, budget: Budget) {
-  // Misma definición que la columna `unconfirmed` de transactions (Banamex, solo Atajo, >24 h), pero relativa a `now` y de los últimos 14 días.
+  // Misma definición que la columna `unconfirmed` de transactions (Banamex, solo Atajo o chat sin correo, >24 h), pero relativa a `now` y de los últimos 14 días.
   const rows = await query<{ id: number; c: number; m: string; norm: string; cat: number | null }>(
     `SELECT x.id, CAST(x.amount_cents AS float) AS c, x.merchant_raw AS m, x.merchant_normalized AS norm, x.category_id AS cat
      FROM dbo.transactions x JOIN dbo.cards c ON c.id = x.card_id
-     WHERE c.issuer='banamex' AND x.kind='expense' AND x.amount_cents>0 AND x.sources='shortcut'
+     WHERE c.issuer='banamex' AND x.kind='expense' AND x.amount_cents>0 AND ${CHAT_SQL.unconfirmed("x")}
        AND x.occurred_at < DATEADD(hour,-24,@now) AND x.occurred_at >= DATEADD(day,-14,@now)`,
     { now: t.dt(now) },
   );
@@ -315,30 +338,36 @@ export async function evaluatePeriodicAlerts(now: Date = new Date()): Promise<nu
 }
 
 /**
- * Corre las alertas periódicas a lo más cada 15 min. La "reserva" del turno es una sola sentencia atómica sobre
+ * Corre las alertas periódicas a lo más cada 15 min y reintenta los avisos pendientes de Telegram. La "reserva" del turno es una sola sentencia atómica sobre
  * app_settings: dos llamadas simultáneas (o dos instancias) no corren a la vez. Nunca lanza.
  */
 export async function maybeRunPeriodicAlerts(now: Date = new Date()): Promise<void> {
   try {
-    const params = { k: t.varchar(LAST_RUN_KEY), v: t.str(String(now.getTime())), thr: t.big(now.getTime() - PERIODIC_MIN_INTERVAL_MS) };
-    const claimed = await query(
-      `UPDATE dbo.app_settings SET value = @v, updated_at = SYSUTCDATETIME() OUTPUT INSERTED.[key]
-       WHERE [key] = @k AND (TRY_CAST(value AS bigint) IS NULL OR TRY_CAST(value AS bigint) <= @thr)`,
-      params,
-    );
-    if (!claimed.length) {
-      if ((await query("SELECT 1 AS x FROM dbo.app_settings WHERE [key] = @k", { k: params.k })).length) return; // corrió hace poco
-      try {
-        await query("INSERT dbo.app_settings ([key], value) VALUES (@k, @v)", { k: params.k, v: params.v });
-      } catch (e) {
-        if (isUniqueViolation(e)) return; // otro proceso la reservó primero
-        throw e;
-      }
-    }
-    await evaluatePeriodicAlerts(now);
+    await runPeriodicIfDue(now);
   } catch (e) {
     warn("maybeRunPeriodicAlerts", e);
   }
+  // Reintenta lo pendiente de Telegram (fallidos, retenidos por horas de silencio) aunque esta corrida no tocara las reglas.
+  await flushTelegram(now);
+}
+
+async function runPeriodicIfDue(now: Date): Promise<void> {
+  const params = { k: t.varchar(LAST_RUN_KEY), v: t.str(String(now.getTime())), thr: t.big(now.getTime() - PERIODIC_MIN_INTERVAL_MS) };
+  const claimed = await query(
+    `UPDATE dbo.app_settings SET value = @v, updated_at = SYSUTCDATETIME() OUTPUT INSERTED.[key]
+     WHERE [key] = @k AND (TRY_CAST(value AS bigint) IS NULL OR TRY_CAST(value AS bigint) <= @thr)`,
+    params,
+  );
+  if (!claimed.length) {
+    if ((await query("SELECT 1 AS x FROM dbo.app_settings WHERE [key] = @k", { k: params.k })).length) return; // corrió hace poco
+    try {
+      await query("INSERT dbo.app_settings ([key], value) VALUES (@k, @v)", { k: params.k, v: params.v });
+    } catch (e) {
+      if (isUniqueViolation(e)) return; // otro proceso la reservó primero
+      throw e;
+    }
+  }
+  await evaluatePeriodicAlerts(now);
 }
 
 // ── Lectura y estado ────────────────────────────────────────────────────────────

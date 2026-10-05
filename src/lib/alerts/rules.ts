@@ -284,7 +284,7 @@ export function unconfirmedCandidate(rows: UnconfirmedRow[], cfg: AlertConfig): 
     rule: "unconfirmed",
     severity: ok.length >= 3 ? "warn" : "info",
     title: ok.length === 1 ? "1 compra sin confirmar por el banco" : `${ok.length} compras sin confirmar por el banco`,
-    body: `${ok.length === 1 ? "Una compra de Banamex lleva" : `${ok.length} compras de Banamex (${money(total)} en total) llevan`} más de 24 horas solo con el aviso del Atajo y sin correo del banco. La más grande: ${money(top.cents)} en ${safeText(top.merchant, 40) || "un comercio"}. Revisa que sean tuyas.`,
+    body: `${ok.length === 1 ? "Una compra de Banamex lleva" : `${ok.length} compras de Banamex (${money(total)} en total) llevan`} más de 24 horas solo con el aviso del Atajo o lo que registraste por chat, sin correo del banco. La más grande: ${money(top.cents)} en ${safeText(top.merchant, 40) || "un comercio"}. Revisa que sean tuyas.`,
     dedupeKey: `unconfirmed:${maxId}`,
     data: { count: ok.length, totalCents: total, ids: ok.slice(0, 20).map((r) => r.id) },
   };

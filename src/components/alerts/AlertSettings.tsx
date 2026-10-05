@@ -37,6 +37,7 @@ export function AlertSettings({ config, categories }: { config: AlertConfig; cat
   const [newMerchant, setNewMerchant] = useState("");
   const [cats, setCats] = useState(config.mutedCategoryIds);
   const [wa, setWa] = useState(config.whatsapp);
+  const [tg, setTg] = useState(config.telegram);
   const [quiet, setQuiet] = useState(config.quietHours);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -71,7 +72,7 @@ export function AlertSettings({ config, categories }: { config: AlertConfig; cat
     if (quiet.enabled && (!quiet.start || !quiet.end)) errs.quiet = "Indica la hora de inicio y de fin";
     setErrors(errs);
     if (Object.keys(errs).length) return setMsg({ ok: false, text: "Revisa los campos marcados." });
-    Object.assign(body, { enabled, mutedMerchants: merchants, mutedCategoryIds: cats, whatsapp: wa, quietHours: quiet });
+    Object.assign(body, { enabled, mutedMerchants: merchants, mutedCategoryIds: cats, whatsapp: wa, telegram: tg, quietHours: quiet });
     setBusy(true);
     const r = await apiFetch("/api/settings/alerts", "PUT", body);
     setBusy(false);
@@ -152,8 +153,22 @@ export function AlertSettings({ config, categories }: { config: AlertConfig; cat
         )}
 
         <fieldset className="grid gap-3 rounded-xl border border-line p-3.5">
+          <legend className="px-1 text-[12px] font-medium">Telegram</legend>
+          <p className="rounded-lg bg-[#60a5fa]/10 p-2.5 text-[#93c5fd]" data-testid="telegram-note">Los avisos llegan al chat privado de cada persona autorizada con el bot de Telegram (gratis). Cada persona debe haberle escrito al bot al menos una vez.</p>
+          <label className="flex items-center gap-3"><input type="checkbox" className="h-5 w-5 accent-[#ff4d1c]" checked={tg.enabled} onChange={(e) => setTg({ ...tg, enabled: e.target.checked })} data-testid="telegram-enabled" /> Avisarme por Telegram</label>
+          <div>
+            <label className="label" htmlFor="a-tg-sev">Gravedad mínima</label>
+            <select id="a-tg-sev" className="field !h-11" value={tg.minSeverity} onChange={(e) => setTg({ ...tg, minSeverity: e.target.value as typeof tg.minSeverity })}>
+              <option value="info">Todos (informativos en adelante)</option>
+              <option value="warn">Atención y graves</option>
+              <option value="high">Solo graves</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset className="grid gap-3 rounded-xl border border-line p-3.5">
           <legend className="px-1 text-[12px] font-medium">WhatsApp</legend>
-          <p className="rounded-lg bg-[#60a5fa]/10 p-2.5 text-[#93c5fd]" data-testid="whatsapp-note">Aún no se envían mensajes: esto solo deja listos los avisos.</p>
+          <p className="rounded-lg bg-[#60a5fa]/10 p-2.5 text-[#93c5fd]" data-testid="whatsapp-note">Apagado: requiere plantillas aprobadas por Meta. Aún no se envían mensajes; esto solo deja listos los avisos.</p>
           <label className="flex items-center gap-3"><input type="checkbox" className="h-5 w-5 accent-[#ff4d1c]" checked={wa.enabled} onChange={(e) => setWa({ ...wa, enabled: e.target.checked })} /> Dejar listos los avisos para WhatsApp</label>
           <div>
             <label className="label" htmlFor="a-wa-sev">Gravedad mínima</label>
@@ -167,6 +182,7 @@ export function AlertSettings({ config, categories }: { config: AlertConfig; cat
 
         <fieldset className="grid gap-3 rounded-xl border border-line p-3.5">
           <legend className="px-1 text-[12px] font-medium">Horas de silencio</legend>
+          <p className="text-[11px] text-muted">Los avisos por Telegram esperan a que terminen (salvo los graves, que salen siempre).</p>
           <label className="flex items-center gap-3"><input type="checkbox" className="h-5 w-5 accent-[#ff4d1c]" checked={quiet.enabled} onChange={(e) => setQuiet({ ...quiet, enabled: e.target.checked })} /> No avisarme en estas horas (hora de Ciudad de México)</label>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="label" htmlFor="a-qs">De</label><input id="a-qs" type="time" className="field !h-11" value={quiet.start} onChange={(e) => setQuiet({ ...quiet, start: e.target.value })} disabled={!quiet.enabled} /></div>

@@ -25,9 +25,11 @@ export type AlertConfig = {
   /** Comercios (normalizados) que nunca generan alertas. */
   mutedMerchants: string[];
   mutedCategoryIds: number[];
-  /** Solo se guarda: el envío futuro lo respeta. */
+  /** Avisos por WhatsApp: solo se encolan (el envío requiere plantillas aprobadas por Meta y aún no existe). */
   whatsapp: { enabled: boolean; minSeverity: AlertSeverity };
-  /** Horas de silencio (hora de Ciudad de México), "HH:MM". Solo se guardan. */
+  /** Avisos por Telegram (gratis): `flushTelegramOutbox` los manda al chat privado de cada persona autorizada. Apagado por omisión. */
+  telegram: { enabled: boolean; minSeverity: AlertSeverity };
+  /** Horas de silencio (hora de Ciudad de México), "HH:MM": el aviso por Telegram espera (salvo los graves). */
   quietHours: { enabled: boolean; start: string; end: string };
 };
 
@@ -45,6 +47,7 @@ export const DEFAULT_ALERT_CONFIG: AlertConfig = {
   mutedMerchants: [],
   mutedCategoryIds: [],
   whatsapp: { enabled: false, minSeverity: "warn" },
+  telegram: { enabled: false, minSeverity: "warn" },
   quietHours: { enabled: false, start: "22:00", end: "08:00" },
 };
 
@@ -76,6 +79,7 @@ function buildSchema(strict: boolean) {
     mutedMerchants: f(z.array(merchant).max(100), D.mutedMerchants),
     mutedCategoryIds: f(z.array(z.number().int().positive()).max(100), D.mutedCategoryIds),
     whatsapp: obj({ enabled: f(z.boolean(), D.whatsapp.enabled), minSeverity: f(z.enum(["info", "warn", "high"]), D.whatsapp.minSeverity) }, D.whatsapp),
+    telegram: obj({ enabled: f(z.boolean(), D.telegram.enabled), minSeverity: f(z.enum(["info", "warn", "high"]), D.telegram.minSeverity) }, D.telegram),
     quietHours: obj({ enabled: f(z.boolean(), D.quietHours.enabled), start: f(hhmm, D.quietHours.start), end: f(hhmm, D.quietHours.end) }, D.quietHours),
   };
   return strict ? z.strictObject(shape).partial() : z.object(shape);
@@ -106,16 +110,18 @@ export function parseAlertConfig(raw: unknown): AlertConfig {
 
 /** Aplica un parche parcial (estricto: lanza ZodError si algo no es válido) sobre `current`. */
 export function applyAlertConfigPatch(current: AlertConfig, patch: unknown): AlertConfig {
-  const p = strictPatch.parse(patch) as Partial<Omit<AlertConfig, "enabled" | "whatsapp" | "quietHours">> & {
+  const p = strictPatch.parse(patch) as Partial<Omit<AlertConfig, "enabled" | "whatsapp" | "telegram" | "quietHours">> & {
     enabled?: Partial<AlertConfig["enabled"]>;
     whatsapp?: Partial<AlertConfig["whatsapp"]>;
+    telegram?: Partial<AlertConfig["telegram"]>;
     quietHours?: Partial<AlertConfig["quietHours"]>;
   };
   const next: AlertConfig = {
     ...current,
-    ...Object.fromEntries(Object.entries(p).filter(([k, v]) => v !== undefined && !["enabled", "whatsapp", "quietHours"].includes(k))),
+    ...Object.fromEntries(Object.entries(p).filter(([k, v]) => v !== undefined && !["enabled", "whatsapp", "telegram", "quietHours"].includes(k))),
     enabled: { ...current.enabled, ...stripUndefined(p.enabled) },
     whatsapp: { ...current.whatsapp, ...stripUndefined(p.whatsapp) },
+    telegram: { ...current.telegram, ...stripUndefined(p.telegram) },
     quietHours: { ...current.quietHours, ...stripUndefined(p.quietHours) },
   };
   next.mutedMerchants = uniq(next.mutedMerchants);

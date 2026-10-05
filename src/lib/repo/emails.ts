@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getCategorizer, type Categorizer } from "@/lib/categorizer";
+import { SQL as CHAT_SQL } from "@/lib/chat-sources";
 import { isUniqueViolation, query, t } from "@/lib/db/pool";
 import { parseBanamexEmail, type EmailInput, type ParsedEmailTx } from "@/lib/sources/banamex-email";
 import { localDate } from "@/lib/time";
@@ -137,11 +138,15 @@ async function mergeIntoReceipt(messageId: string, tx: ParsedEmailTx, cardId: nu
   }
 }
 
-/** Atajo → correo: el correo manda (comercio, autorización, fecha); se conservan ambas fuentes. */
+/**
+ * Atajo (o gasto tecleado en WhatsApp/Telegram, o ambos) → correo: el correo manda (comercio, autorización, fecha); se conservan todas las
+ * fuentes. `sources` conserva lo previo y agrega ',email' (shortcut → 'shortcut,email'; whatsapp → 'whatsapp,email'). Las filas de chat con
+ * fecha explícita (`whatsapp-d`, `telegram-d`: hora artificial) no se absorben: ver src/lib/chat-sources.ts.
+ */
 async function mergeIntoShortcut(messageId: string, tx: ParsedEmailTx, cardId: number, deps?: { categorizer?: Categorizer }): Promise<number | null> {
   const cand = await query<{ id: number; category_id: number | null }>(
     `SELECT TOP 1 id, category_id FROM dbo.transactions
-     WHERE card_id=@c AND amount_cents=@a AND kind='expense' AND email_message_id IS NULL AND sources = 'shortcut'
+     WHERE card_id=@c AND amount_cents=@a AND kind='expense' AND email_message_id IS NULL AND sources IN (${CHAT_SQL.emailMergeable})
        AND ABS(DATEDIFF(second, occurred_at, @at)) <= @win
      ORDER BY ABS(DATEDIFF(second, occurred_at, @at)), id`,
     { c: t.int(cardId), a: t.big(tx.amountCents), at: t.dt(tx.occurredAt), win: t.int(MERGE_WINDOW_SECONDS) },
@@ -159,7 +164,7 @@ async function mergeIntoShortcut(messageId: string, tx: ParsedEmailTx, cardId: n
     // dedupe_hash se conserva: así un reintento del Atajo sigue siendo duplicado.
     const r = await query(
       `UPDATE dbo.transactions SET merchant_raw=@raw, merchant_normalized=@norm, occurred_at=@at, occurred_date=@date,
-         auth_code=@auth, email_message_id=@mid, source='email', sources='shortcut,email', is_recurring=@rec, category_id=@cat, account_ref=@acct,
+         auth_code=@auth, email_message_id=@mid, source='email', sources=LEFT(sources + ',email', 40), is_recurring=@rec, category_id=@cat, account_ref=@acct,
          category_source = CASE WHEN @csrc IS NOT NULL THEN @csrc ELSE category_source END,
          category_confidence = CASE WHEN @csrc IS NOT NULL THEN @cconf ELSE category_confidence END
        OUTPUT INSERTED.id WHERE id=@id AND email_message_id IS NULL`,

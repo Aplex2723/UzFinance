@@ -3,6 +3,7 @@ import { Ban, CheckCheck, Download, ExternalLink, OctagonAlert, RotateCcw } from
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { sourcesLabel } from "@/lib/chat-sources";
 import { apiFetch } from "@/lib/client";
 import type { DocumentDetail } from "@/lib/docs/detail";
 import type { ImportReport } from "@/lib/import/statements";
@@ -33,7 +34,6 @@ const WHY: Record<string, string> = {
   total_mismatch: "La suma de lo que cobró el banco no coincide con la de la app en este periodo: algo falta o sobra aunque no se vea a primera vista.",
   extraction_check_failed: "Los totales leídos del PDF no cuadran con los impresos en el propio estado, así que esta lectura no es confiable.",
 };
-const SOURCE_LABEL: Record<string, string> = { shortcut: "Atajo", email: "Correo", statement: "Estado", manual: "Manual", receipt: "Comprobante" };
 
 const money = (n: unknown) => (typeof n === "number" && Number.isFinite(n) ? formatMXN(n) : null);
 
@@ -49,7 +49,7 @@ function TxLine({ b }: { b: TxBrief }) {
       <span className="num text-muted">#{b.id}</span>
       <span className="min-w-0 flex-1 basis-[140px] truncate">{b.merchant}</span>
       <span className="num">{formatMXN(b.cents)}</span>
-      <span className="text-muted">{formatDay(`${b.date}T12:00:00Z`)} · {b.card} · {SOURCE_LABEL[b.source] ?? b.source}</span>
+      <span className="text-muted">{formatDay(`${b.date}T12:00:00Z`)} · {b.card} · {sourcesLabel(b.sources || b.source)}</span>
       <Link href={txLink(b)} className="inline-flex items-center gap-1 text-accent-2 hover:underline" aria-label={`Ver ${b.merchant} en Transacciones`}>Ver <ExternalLink size={11} aria-hidden /></Link>
     </li>
   );

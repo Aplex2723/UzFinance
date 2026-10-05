@@ -13,6 +13,45 @@ export function parseNamedTokens(raw: string): { name: string; token: string }[]
   return out;
 }
 
+/** "" (App Setting vacío) se trata como no definido. */
+const optionalText = z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().optional());
+
+/**
+ * Bot de WhatsApp: TODO opcional y sin validar aquí (un valor inválido nunca debe tumbar el resto de la app).
+ * La validación estricta vive en `getWhatsAppConfig()` (src/lib/whatsapp/config.ts), que falla cerrado: sin configuración válida
+ * el webhook no procesa nada.
+ */
+export const whatsappEnvShape = {
+  WHATSAPP_VERIFY_TOKEN: optionalText,
+  WHATSAPP_APP_SECRET: optionalText,
+  WHATSAPP_ACCESS_TOKEN: optionalText,
+  WHATSAPP_PHONE_NUMBER_ID: optionalText,
+  /** "5215512345678=Uziel,5215587654321=Ana" (1 a 5 personas). */
+  WHATSAPP_ALLOWED: optionalText,
+  /** Versión de la Graph API; por omisión v25.0. */
+  WHATSAPP_GRAPH_VERSION: optionalText,
+  /** URL pública de la app (para enlaces en las respuestas); en Azure se deduce de WEBSITE_HOSTNAME. */
+  APP_URL: optionalText,
+  WEBSITE_HOSTNAME: optionalText,
+};
+
+/**
+ * Bot de Telegram: TODO opcional y sin validar aquí (igual que WhatsApp: un valor inválido nunca debe tumbar el resto de la app).
+ * La validación estricta vive en `getTelegramConfig()` (src/lib/telegram/config.ts), que falla cerrado.
+ */
+export const telegramEnvShape = {
+  /** Token de @BotFather: "123456789:AA…". */
+  TELEGRAM_BOT_TOKEN: optionalText,
+  /** `secret_token` del setWebhook: Telegram lo devuelve en el encabezado X-Telegram-Bot-Api-Secret-Token de cada POST. */
+  TELEGRAM_WEBHOOK_SECRET: optionalText,
+  /** "123456789=Uziel,987654321=Ana": id numérico de usuario=Nombre (0 a 5). Vacío = modo descubrimiento (el bot solo responde /id). */
+  TELEGRAM_ALLOWED: optionalText,
+  /** Usuario del bot (sin @): ignora comandos dirigidos a otro bot en un grupo (/resumen@OtroBot) y detecta menciones y respuestas al bot. */
+  TELEGRAM_BOT_USERNAME: optionalText,
+  /** Ids de chat/grupo donde el bot atiende ("-1001234567890,-100987"; negativos permitidos; máx. 10). Vacío (por omisión) = los grupos se ignoran por completo. */
+  TELEGRAM_ALLOWED_CHATS: optionalText,
+};
+
 const schema = z.object({
   NODE_ENV: z.string().default("development"),
   AUTH_MODE: z.enum(["dev", "easyauth"]).default("easyauth"),
@@ -43,6 +82,8 @@ const schema = z.object({
   DB_PASSWORD: z.string().optional(),
   DB_TRUST_SERVER_CERT: z.stringbool().default(false),
   DB_CLIENT_ID: z.string().optional(),
+  ...whatsappEnvShape,
+  ...telegramEnvShape,
 });
 
 export type Env = z.infer<typeof schema>;

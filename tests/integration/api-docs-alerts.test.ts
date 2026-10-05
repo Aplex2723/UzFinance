@@ -284,6 +284,18 @@ describe("alertas", () => {
     expect(saved.mutedMerchants).toHaveLength(1);
     expect((await getAlertConfig()).largePurchaseCents).toBe(8_000_00);
 
+    // Telegram: apagado por omisión, parche parcial que no toca WhatsApp, y validación propia
+    expect(g.config.telegram).toEqual({ enabled: false, minSeverity: "warn" });
+    expect(saved.telegram).toEqual({ enabled: false, minSeverity: "warn" });
+    const tg = await put({ telegram: { enabled: true, minSeverity: "high" } });
+    expect(tg.status).toBe(200);
+    expect((await body(tg)).config).toMatchObject({ telegram: { enabled: true, minSeverity: "high" }, whatsapp: { enabled: true, minSeverity: "warn" } });
+    expect((await getAlertConfig()).telegram).toEqual({ enabled: true, minSeverity: "high" });
+    expect((await put({ telegram: { minSeverity: "urgente" } })).status).toBe(400);
+    expect((await put({ telegram: { enabled: "si" } })).status).toBe(400);
+    expect((await put({ telegram: { token: "x" } })).status).toBe(400);
+    expect((await getAlertConfig()).telegram).toEqual({ enabled: true, minSeverity: "high" });
+
     const bad = await put({ largePurchaseCents: 5 });
     expect(bad.status).toBe(400);
     expect((await body(bad)).issues[0].path).toBe("largePurchaseCents");

@@ -2,6 +2,7 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { sourcesLabel } from "@/lib/chat-sources";
 import { apiFetch, emit, EVENTS } from "@/lib/client";
 import { formatDay, formatTime } from "@/lib/format";
 import { formatMXN } from "@/lib/money";
@@ -31,7 +32,7 @@ export function TransactionsTable({ rows }: { rows: Transaction[] }) {
             </div>
             <div className="min-w-0 flex-1 basis-[180px]">
               <p className="truncate font-medium">{r.merchant_raw}</p>
-              <p className="truncate text-[11px] text-muted">{r.account_ref ? `Domiciliación ···${r.account_ref}` : r.card_name} · {r.sources.split(",").join(" + ")}{r.notes ? ` · ${r.notes}` : ""}</p>
+              <p className="truncate text-[11px] text-muted">{r.account_ref ? `Domiciliación ···${r.account_ref}` : r.card_name} · {sourcesLabel(r.sources)}{r.notes ? ` · ${r.notes}` : ""}</p>
               {(r.unconfirmed || r.is_recurring || r.plan_id !== null || r.category_source === "jev") && (
                 <p className="mt-0.5 flex flex-wrap gap-1.5 text-[10px]">
                   {r.plan_id !== null && <span className="rounded-full border border-accent/50 px-2 py-0.5 text-accent-2" data-testid="msi-badge">A meses (MSI)</span>}

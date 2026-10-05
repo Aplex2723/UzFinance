@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampBody, clampTitle, safeText, shortHash, statementDiffCandidate, transferRegisteredCandidate, truncate, whatsappText } from "@/lib/alerts/text";
+import { clampBody, chatText, clampTitle, safeText, shortHash, statementDiffCandidate, transferRegisteredCandidate, truncate, whatsappText } from "@/lib/alerts/text";
 
 describe("texto seguro", () => {
   it("safeText: quita control y bidi, colapsa espacios, trunca", () => {
@@ -73,5 +73,32 @@ describe("statement_diff y transfer_registered (formatos para el integrador)", (
     expect(c.title).not.toContain("\n");
     expect(c.body).toContain("ABC123");
     expect(transferRegisteredCandidate({ txId: 5, amountCents: 1, severity: "warn" }).severity).toBe("warn");
+  });
+});
+
+describe("chatText (aviso de Telegram en texto plano)", () => {
+  const a = { title: "Compra fuerte: $6,000.00", body: "Detalle de la compra.\nSegunda línea.", severity: "high" as const };
+  it("título, cuerpo y marca de severidad, sin negritas ni marcado", () => {
+    const t = chatText(a);
+    expect(t).toBe("🚨 Compra fuerte: $6,000.00\nDetalle de la compra.\nSegunda línea.");
+    expect(t).not.toMatch(/[*_`]/);
+    expect(chatText({ ...a, severity: "warn" }).startsWith("⚠️ ")).toBe(true);
+    expect(chatText({ ...a, severity: "info" }).startsWith("ℹ️ ")).toBe(true);
+  });
+  it("lo que viene de terceros no se interpreta: queda tal cual (sin parse_mode no es marcado)", () => {
+    expect(chatText({ title: "AMZN *MKT", body: "x", severity: "warn" })).toContain("AMZN *MKT");
+  });
+  it("sin cuerpo no deja una línea vacía; con enlace lo agrega al final", () => {
+    expect(chatText({ title: "t", body: "", severity: "info" })).toBe("ℹ️ t");
+    expect(chatText(a, "https://app.example.com/")).toMatch(/\n\nVer en la app: https:\/\/app\.example\.com\/alertas$/);
+  });
+  it("nunca pasa de 4096 unidades ni parte un emoji (título/cuerpo desmedidos)", () => {
+    const t = chatText({ title: "t".repeat(9000), body: "😀".repeat(9000), severity: "high" }, "https://x.example");
+    expect(t.length).toBeLessThanOrEqual(4096);
+    expect(t.endsWith("\uD83D")).toBe(false);
+  });
+  it("sin caracteres de control ni de dirección", () => {
+    const t = chatText({ title: "a\u202eb\u0007c", body: "x\u0000y", severity: "info" });
+    expect(t).not.toMatch(/[\u0000-\u0008\u202e]/);
   });
 });

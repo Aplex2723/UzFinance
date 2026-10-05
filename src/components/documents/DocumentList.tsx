@@ -3,6 +3,7 @@ import { FileText, Receipt, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { originLabel } from "@/lib/chat-sources";
 import { apiFetch } from "@/lib/client";
 import { formatDay, formatTime } from "@/lib/format";
 import type { DocRow } from "@/lib/repo/documents";
@@ -44,7 +45,7 @@ export function DocumentList({ documents }: { documents: DocListItem[] }) {
               <Link href={`/documentos/${d.id}`} className="block truncate font-medium hover:underline" data-testid="doc-title">{d.title ?? KIND_LABEL[d.kind]}</Link>
               <p className="truncate text-[11px] text-muted">
                 {KIND_LABEL[d.kind]}{period(d) ? ` · ${period(d)}` : ""} · {formatDay(d.created_at)} {formatTime(d.created_at)}
-                {d.origin === "whatsapp" ? " · WhatsApp" : ""}
+                {originLabel(d.origin) ? ` · ${originLabel(d.origin)}` : ""}
               </p>
               {d.detail && d.status !== "processed" && <p className="mt-0.5 line-clamp-2 text-[11px] text-muted">{d.detail}</p>}
             </div>

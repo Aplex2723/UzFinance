@@ -52,6 +52,21 @@ export function whatsappText(a: { title: string; body: string; severity: AlertSe
   return truncate(`${ICON[a.severity] ?? ICON.info} *${title}*\n${body}`, 300);
 }
 
+/** Límite de un mensaje de Telegram (unidades UTF-16). */
+export const CHAT_TEXT_MAX = 4096;
+
+/**
+ * Aviso en texto PLANO para un chat (Telegram, que se manda sin `parse_mode`): sin negritas ni marcado, con el emoji de severidad.
+ * El título y el cuerpo ya vienen acotados (≤120 y ≤500) y limpios de caracteres de control; `appUrl` (opcional, ya validada por la
+ * configuración) agrega el enlace a la pantalla de alertas. Siempre ≤ 4096 unidades.
+ */
+export function chatText(a: { title: string; body: string; severity: AlertSeverity }, appUrl?: string | null): string {
+  const title = safeText(a.title, 120);
+  const body = clampBody(a.body);
+  const link = appUrl ? `\n\nVer en la app: ${appUrl.replace(/\/+$/, "")}/alertas` : "";
+  return truncate(`${ICON[a.severity] ?? ICON.info} ${title}${body ? `\n${body}` : ""}${link}`, CHAT_TEXT_MAX);
+}
+
 // ── Formatos para las alertas que genera el integrador (conciliación e ingesta de comprobantes) ──
 
 /** Estado de cuenta contra lo registrado: avisa la diferencia. Severidad por magnitud: <$100 info, <$2,000 warn, resto high. */

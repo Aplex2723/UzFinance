@@ -15,6 +15,10 @@ export type RawTransaction = {
   planId?: number;
   /** Nº de ocurrencia (0, 1, 2…) de un movimiento idéntico (tarjeta, día, monto, comercio) dentro del mismo estado de cuenta. */
   seq?: number;
+  /** Valor de la columna `sources` al insertar (por omisión, la fuente). Ej. 'whatsapp': la fuente es 'manual' pero se sabe de dónde vino. */
+  sourcesTag?: string;
+  /** Tarjeta ya resuelta (id): evita volver a resolverla por texto cuando dos nombres normalizan igual. */
+  cardId?: number;
 };
 
 /**

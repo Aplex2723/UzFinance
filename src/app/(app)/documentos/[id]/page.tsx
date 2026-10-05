@@ -8,6 +8,7 @@ import { StatementReport } from "@/components/documents/StatementReport";
 import { TransferDone, TransferReview } from "@/components/documents/TransferReview";
 import { Panel } from "@/components/ui/Panel";
 import { requirePageUser } from "@/lib/auth/page";
+import { originLabel } from "@/lib/chat-sources";
 import { getDocumentDetail } from "@/lib/docs/detail";
 import { formatDay, formatTime } from "@/lib/format";
 import { listCategories } from "@/lib/repo/categories";
@@ -29,7 +30,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="num break-words text-2xl font-semibold" data-testid="doc-heading">{d.title ?? KIND_LABEL[d.kind]}</h1>
-            <p className="mt-1 text-muted">{KIND_LABEL[d.kind]} · subido {formatDay(d.created_at)} {formatTime(d.created_at)}{d.origin === "whatsapp" ? " · por WhatsApp" : ""}{d.pages ? ` · ${d.pages} pág.` : ""}</p>
+            <p className="mt-1 text-muted">{KIND_LABEL[d.kind]} · subido {formatDay(d.created_at)} {formatTime(d.created_at)}{originLabel(d.origin) ? ` · por ${originLabel(d.origin)}` : ""}{d.pages ? ` · ${d.pages} pág.` : ""}</p>
           </div>
           <div className="flex items-center gap-2"><StatusChip status={d.status} /><DeleteDocumentButton id={d.id} statement={d.kind === "statement"} /></div>
         </div>

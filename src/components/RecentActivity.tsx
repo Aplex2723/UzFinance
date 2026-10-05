@@ -1,3 +1,4 @@
+import { sourcesLabel } from "@/lib/chat-sources";
 import { formatMXN } from "@/lib/money";
 import { formatTime, relativeDay } from "@/lib/format";
 import { localDate } from "@/lib/time";
@@ -23,7 +24,7 @@ export function RecentActivity({ rows, showSource = false }: { rows: Transaction
             <p className="truncate font-medium">{r.merchant_raw}</p>
             <p className="truncate text-[11px] text-muted">
               {r.card_name} · {r.category_name ?? "Sin categoría"} · {relativeDay(r.occurred_date, today)} {formatTime(r.occurred_at)}
-              {showSource && ` · ${r.source}`}
+              {showSource && ` · ${sourcesLabel(r.sources || r.source)}`}
             </p>
           </div>
           <p className={`num shrink-0 font-medium ${r.amount_cents < 0 ? "text-up" : ""}`}>

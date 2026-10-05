@@ -2,7 +2,7 @@ import { query, t } from "@/lib/db/pool";
 
 /** Un PDF recibido (de la app o, más adelante, de WhatsApp). El archivo NO se guarda: solo su huella y lo extraído. */
 export type DocKind = "transfer_receipt" | "statement" | "unknown";
-export type DocOrigin = "app" | "whatsapp";
+export type DocOrigin = "app" | "whatsapp" | "telegram";
 export type DocStatus = "processed" | "needs_review" | "rejected" | "failed";
 
 export type DocRow = {
