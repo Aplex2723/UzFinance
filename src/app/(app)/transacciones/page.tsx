@@ -1,54 +1,75 @@
 import Link from "next/link";
-import { MonthNav } from "@/components/MonthNav";
+import { redirect } from "next/navigation";
+import { PendingDim, TxFiltersProvider } from "@/components/transactions/TxFiltersProvider";
+import { TxFilterBar, type FilterCard } from "@/components/transactions/TxFilterBar";
+import { TxInsights } from "@/components/transactions/TxInsights";
 import { TransactionsTable } from "@/components/TransactionsTable";
 import { PageTitle, Panel } from "@/components/ui/Panel";
 import { requirePageUser } from "@/lib/auth/page";
 import { listCards } from "@/lib/repo/cards";
 import { listCategories } from "@/lib/repo/categories";
-import { listTransactions } from "@/lib/repo/transactions";
-import { listQuery } from "@/lib/schemas";
+import { getTransactionSummary, listCardFacets, listTransactions } from "@/lib/repo/transactions";
+import { activeFilterCount, parseTxParams, serializeTxParams, todayLocal, viewToCriteria, type TxView } from "@/lib/tx-filters";
 
 const PAGE = 25;
+/** Tarjetas que no son una tarjeta de verdad: solo aparecen si tienen movimientos con los filtros actuales. */
+const SYSTEM_CARDS = new Set(["Domiciliación", "Sin asignar"]);
+
+const href = (v: Partial<TxView>, today: string) => {
+  const qs = serializeTxParams(v, today).toString();
+  return qs ? `/transacciones?${qs}` : "/transacciones";
+};
 
 export default async function Page({ searchParams }: PageProps<"/transacciones">) {
   await requirePageUser();
   const sp = await searchParams;
-  const flat = Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]).filter(([, v]) => v !== undefined && v !== ""));
-  const parsed = listQuery.safeParse(flat);
-  const f = parsed.success ? parsed.data : {};
-  const page = Math.max(1, Number(flat.page) || 1);
-  const [cards, categories, { rows, total }] = await Promise.all([
-    listCards(true), listCategories(),
-    listTransactions({ q: f.q, cardId: f.card, categoryId: f.category, month: f.month, kind: f.kind === "card_payment" ? "card_payment" : "expense", limit: PAGE, offset: (page - 1) * PAGE }),
+  const today = todayLocal();
+  // La URL es la fuente de verdad. Los parámetros inválidos se ignoran (nunca rompen la página).
+  const { view } = parseTxParams(sp, today);
+  const criteria = viewToCriteria(view);
+  const [cards, categories, { rows, total }, summary, facets] = await Promise.all([
+    listCards(true),
+    listCategories(),
+    listTransactions({ ...criteria, limit: PAGE, offset: (view.page - 1) * PAGE }),
+    getTransactionSummary(criteria, { today }),
+    listCardFacets(criteria),
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE));
-  const qs = (p: number) => { const u = new URLSearchParams(flat as Record<string, string>); u.set("page", String(p)); return `/transacciones?${u}`; };
+  if (view.page > pages) redirect(href({ ...view, page: 1 }, today)); // enlace viejo: la página ya no existe con estos filtros
+
+  const chipCards: FilterCard[] = cards
+    .map((c) => {
+      const count = facets.get(c.id)?.count ?? 0;
+      const muted: FilterCard["muted"] = SYSTEM_CARDS.has(c.name) ? "system" : c.active ? null : "inactive";
+      return { id: c.id, name: c.name, issuer: c.issuer, last4: c.last4, color: c.color, art: c.art, muted, count };
+    })
+    // Activas siempre; inactivas y de sistema solo si tienen movimientos con estos filtros (o ya están elegidas).
+    .filter((c) => !c.muted || c.count > 0 || view.cardIds.includes(c.id));
+  const filtered = activeFilterCount(view) > 0;
 
   return (
     <>
-      <PageTitle title="Transacciones" subtitle={`${total.toLocaleString("es-MX")} movimientos`} action={f.month ? <MonthNav month={f.month} base="/transacciones" /> : undefined} />
+      <PageTitle title="Transacciones" subtitle={`${total.toLocaleString("es-MX")} ${total === 1 ? "movimiento" : "movimientos"}${filtered ? " con los filtros actuales" : ""}`} />
       <nav aria-label="Tipo de movimiento" className="mb-3 flex gap-2">
-        <Link href="/transacciones" className={`btn ${f.kind !== "card_payment" ? "btn-primary" : ""}`} aria-current={f.kind !== "card_payment" ? "page" : undefined}>Gastos</Link>
-        <Link href="/transacciones?kind=card_payment" className={`btn ${f.kind === "card_payment" ? "btn-primary" : ""}`} aria-current={f.kind === "card_payment" ? "page" : undefined}>Pagos de tarjeta</Link>
+        <Link href={href({ ...view, kind: "expense", page: 1 }, today)} className={`btn !h-10 ${view.kind !== "card_payment" ? "btn-primary" : ""}`} aria-current={view.kind !== "card_payment" ? "page" : undefined}>Gastos</Link>
+        <Link href={href({ ...view, kind: "card_payment", page: 1 }, today)} className={`btn !h-10 ${view.kind === "card_payment" ? "btn-primary" : ""}`} aria-current={view.kind === "card_payment" ? "page" : undefined}>Pagos de tarjeta</Link>
       </nav>
-      <Panel>
-        <form method="get" className="mb-4 grid gap-2 sm:grid-cols-[1fr_160px_160px_150px_auto]" role="search" aria-label="Filtrar transacciones">
-          {f.kind === "card_payment" && <input type="hidden" name="kind" value="card_payment" />}
-          <input name="q" defaultValue={f.q} placeholder="Buscar comercio o nota" className="field" aria-label="Buscar" maxLength={100} />
-          <select name="card" defaultValue={f.card ?? ""} className="field" aria-label="Tarjeta"><option value="">Todas las tarjetas</option>{cards.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-          <select name="category" defaultValue={f.category ?? ""} className="field" aria-label="Categoría"><option value="">Todas las categorías</option><option value="none">Sin categoría</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-          <input name="month" type="month" defaultValue={f.month ?? ""} className="field" aria-label="Mes" />
-          <button className="btn btn-primary !h-[38px]">Filtrar</button>
-        </form>
-        <TransactionsTable rows={rows} />
-        {pages > 1 && (
-          <nav aria-label="Paginación" className="mt-4 flex items-center justify-between text-muted">
-            {page > 1 ? <Link className="btn" href={qs(page - 1)}>Anterior</Link> : <span />}
-            <span>Página {page} de {pages}</span>
-            {page < pages ? <Link className="btn" href={qs(page + 1)}>Siguiente</Link> : <span />}
-          </nav>
-        )}
-      </Panel>
+      <TxFiltersProvider view={view} today={today}>
+        <PendingDim><TxInsights summary={summary} view={view} today={today} /></PendingDim>
+        <Panel>
+          <TxFilterBar cards={chipCards} categories={categories.map((c) => ({ id: c.id, name: c.name, color: c.color }))} />
+          <PendingDim>
+            <TransactionsTable rows={rows} />
+            {pages > 1 && (
+              <nav aria-label="Paginación" className="mt-4 flex items-center justify-between text-muted">
+                {view.page > 1 ? <Link className="btn !h-10" href={href({ ...view, page: view.page - 1 }, today)}>Anterior</Link> : <span />}
+                <span>Página {view.page} de {pages}</span>
+                {view.page < pages ? <Link className="btn !h-10" href={href({ ...view, page: view.page + 1 }, today)}>Siguiente</Link> : <span />}
+              </nav>
+            )}
+          </PendingDim>
+        </Panel>
+      </TxFiltersProvider>
     </>
   );
 }

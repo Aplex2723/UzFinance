@@ -5,9 +5,15 @@ import { isUniqueViolation, query, t } from "@/lib/db/pool";
 import { normalizeMerchant } from "@/lib/merchant";
 import type { RawTransaction } from "@/lib/sources/types";
 import { localDate } from "@/lib/time";
+import { addDays, effectiveRange, SOURCE_TOKENS, type TxCriteria, type TxSort } from "@/lib/tx-filters";
+import { avgTicket, compareTotals, dailyAverage, isTodayPeriod, previousPeriod, rankShares, type TxSummary } from "@/lib/tx-summary";
 import type { Source, Transaction } from "@/lib/types";
 import { getCard, resolveCard } from "./cards";
 import { listCategories } from "./categories";
+
+/** "Sin confirmar": Banamex, gasto, solo Atajo/chat, sin correo y con más de 24 h. Se usa en el SELECT (columna) y en el filtro. */
+const UNCONFIRMED_SQL = `(c.issuer = 'banamex' AND x.kind = 'expense' AND ${CHAT_SQL.unconfirmed("x")} AND x.occurred_at < DATEADD(hour, -24, SYSUTCDATETIME()))`;
+const FROM_BASE = "FROM dbo.transactions x JOIN dbo.cards c ON c.id = x.card_id";
 
 const SELECT = `
   SELECT x.id, x.occurred_at, CONVERT(char(10), x.occurred_date, 23) AS occurred_date,
@@ -15,8 +21,7 @@ const SELECT = `
          x.card_id, c.name AS card_name, c.issuer, x.category_id, k.name AS category_name, k.color AS category_color,
          x.source, x.notes, x.kind, x.is_recurring, x.sources, x.auth_code, x.account_ref,
          x.category_source, CAST(x.category_confidence AS float) AS category_confidence, x.plan_id,
-         CAST(CASE WHEN c.issuer = 'banamex' AND x.kind = 'expense' AND ${CHAT_SQL.unconfirmed("x")}
-                    AND x.occurred_at < DATEADD(hour, -24, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS bit) AS unconfirmed
+         CAST(CASE WHEN ${UNCONFIRMED_SQL} THEN 1 ELSE 0 END AS bit) AS unconfirmed
   FROM dbo.transactions x
   JOIN dbo.cards c ON c.id = x.card_id
   LEFT JOIN dbo.categories k ON k.id = x.category_id`;
@@ -24,27 +29,43 @@ const SELECT = `
 type Row = Omit<Transaction, "occurred_at" | "is_recurring" | "unconfirmed"> & { occurred_at: Date; is_recurring: boolean | number; unconfirmed: boolean | number };
 const map = (r: Row): Transaction => ({ ...r, occurred_at: r.occurred_at.toISOString(), is_recurring: !!r.is_recurring, unconfirmed: !!r.unconfirmed });
 
-export type TxFilter = {
-  q?: string;
+export type TxFilter = TxCriteria & {
+  /** Una tarjeta (se suma a `cardIds`). */
   cardId?: number;
-  categoryId?: number | "none";
-  /** Por defecto solo gastos: los pagos de tarjeta no cuentan como gasto. */
-  kind?: "expense" | "card_payment" | "all";
-  month?: string; // YYYY-MM
-  from?: string;
-  to?: string;
   limit?: number;
   offset?: number;
 };
 
-export async function listTransactions(f: TxFilter = {}): Promise<{ rows: Transaction[]; total: number }> {
+type Params = Record<string, ReturnType<(typeof t)[keyof typeof t]>>;
+
+/** Orden permitido (lista blanca: la entrada del usuario nunca llega al ORDER BY). */
+const ORDER_BY: Record<TxSort, string> = {
+  recent: "x.occurred_at DESC, x.id DESC",
+  oldest: "x.occurred_at ASC, x.id ASC",
+  amount_desc: "ABS(x.amount_cents) DESC, x.occurred_at DESC, x.id DESC",
+  amount_asc: "ABS(x.amount_cents) ASC, x.occurred_at DESC, x.id DESC",
+};
+
+/**
+ * WHERE compartido por la lista, el conteo, el resumen y las facetas. SOLO texto fijo: todo valor del usuario va como parámetro
+ * (`@q`, `@card0`…, `@s0`…, `@minc`…); lo único interpolado son constantes de este archivo (tipo de movimiento, expresiones).
+ * Requiere los alias `x` (transactions) y `c` (cards).
+ */
+function buildWhere(f: TxFilter, opts: { skipCards?: boolean } = {}): { where: string; params: Params } {
   const where: string[] = [f.kind === "all" ? "1=1" : `x.kind = '${f.kind === "card_payment" ? "card_payment" : "expense"}'`];
-  const params: Record<string, ReturnType<(typeof t)[keyof typeof t]>> = {};
+  const params: Params = {};
   if (f.q) {
     where.push("(x.merchant_normalized LIKE @q ESCAPE '\\' OR x.merchant_raw LIKE @q ESCAPE '\\' OR x.notes LIKE @q ESCAPE '\\')");
     params.q = t.str(`%${f.q.replace(/[\\%_[]/g, "\\$&")}%`);
   }
-  if (f.cardId) { where.push("x.card_id = @card"); params.card = t.int(f.cardId); }
+  if (!opts.skipCards) {
+    const ids = [...new Set([...(f.cardId ? [f.cardId] : []), ...(f.cardIds ?? [])])].filter((n) => Number.isInteger(n) && n > 0).slice(0, 50);
+    if (ids.length === 1) { where.push("x.card_id = @card"); params.card = t.int(ids[0]); }
+    else if (ids.length > 1) {
+      where.push(`x.card_id IN (${ids.map((_, i) => `@card${i}`).join(", ")})`);
+      ids.forEach((id, i) => { params[`card${i}`] = t.int(id); });
+    }
+  }
   if (f.categoryId === "none") where.push("x.category_id IS NULL");
   else if (f.categoryId) { where.push("x.category_id = @cat"); params.cat = t.int(f.categoryId); }
   if (f.month) {
@@ -53,16 +74,115 @@ export async function listTransactions(f: TxFilter = {}): Promise<{ rows: Transa
   }
   if (f.from) { where.push("x.occurred_date >= @from"); params.from = t.date(f.from); }
   if (f.to) { where.push("x.occurred_date <= @to"); params.to = t.date(f.to); }
+  // Fuente: la etiqueta está en la lista `sources` ("shortcut,email"): una fila fusionada cuenta para las dos. Varias = O.
+  const tokens = [...new Set((f.sources ?? []).flatMap((s) => SOURCE_TOKENS[s] ?? []))];
+  if (tokens.length) {
+    where.push(`(${tokens.map((_, i) => `(',' + ISNULL(NULLIF(x.sources, ''), x.source) + ',') LIKE @s${i}`).join(" OR ")})`);
+    tokens.forEach((tok, i) => { params[`s${i}`] = t.varchar(`%,${tok},%`); });
+  }
+  if (f.minCents && f.minCents > 0) { where.push("ABS(x.amount_cents) >= @minc"); params.minc = t.big(f.minCents); }
+  if (f.maxCents && f.maxCents > 0) { where.push("ABS(x.amount_cents) <= @maxc"); params.maxc = t.big(f.maxCents); }
+  if (f.unconfirmed) where.push(UNCONFIRMED_SQL);
+  if (f.msi) where.push("x.plan_id IS NOT NULL");
+  if (f.recurring) where.push("x.is_recurring = 1");
+  return { where: where.join(" AND "), params };
+}
+
+export async function listTransactions(f: TxFilter = {}): Promise<{ rows: Transaction[]; total: number }> {
+  const { where: w, params } = buildWhere(f);
   const limit = Math.min(Math.max(f.limit ?? 50, 1), 500);
   const offset = Math.max(f.offset ?? 0, 0);
-  const w = where.join(" AND ");
+  const order = ORDER_BY[f.sort ?? "recent"] ?? ORDER_BY.recent;
   const [rows, total] = await Promise.all([
-    query<Row>(`${SELECT} WHERE ${w} ORDER BY x.occurred_at DESC, x.id DESC OFFSET @off ROWS FETCH NEXT @lim ROWS ONLY`, {
+    query<Row>(`${SELECT} WHERE ${w} ORDER BY ${order} OFFSET @off ROWS FETCH NEXT @lim ROWS ONLY`, {
       ...params, off: t.int(offset), lim: t.int(limit),
     }),
-    query<{ n: number }>(`SELECT COUNT(*) AS n FROM dbo.transactions x WHERE ${w}`, params),
+    query<{ n: number }>(`SELECT COUNT(*) AS n ${FROM_BASE} WHERE ${w}`, params),
   ]);
   return { rows: rows.map(map), total: total[0].n };
+}
+
+/** Movimientos y monto por tarjeta con TODOS los filtros menos el de tarjeta (para los contadores de los chips de tarjeta). */
+export async function listCardFacets(f: TxFilter = {}): Promise<Map<number, { count: number; cents: number }>> {
+  const { where, params } = buildWhere(f, { skipCards: true });
+  const rows = await query<{ id: number; n: number; cents: number }>(
+    `SELECT c.id, COUNT(*) AS n, CAST(SUM(x.amount_cents) AS float) AS cents ${FROM_BASE} WHERE ${where} GROUP BY c.id`,
+    params,
+  );
+  return new Map(rows.map((r) => [Number(r.id), { count: Number(r.n), cents: Number(r.cents) }]));
+}
+
+const N = (v: unknown) => Number(v ?? 0);
+const catColor = (c: string | null) => c ?? "#6b7280";
+
+/**
+ * Resumen del conjunto FILTRADO (mismos filtros que la lista; ignora paginación y orden) para las tarjetitas de arriba.
+ * No carga filas: agrega en la base (por tarjeta, por categoría, la compra más alta, el comercio más grande y, si hay periodo,
+ * el total del periodo equivalente anterior). Los reembolsos (monto negativo) restan del total pero no cuentan como compra para
+ * el ticket promedio. `today` es el día de hoy en CDMX (YYYY-MM-DD); se puede fijar en pruebas.
+ */
+export async function getTransactionSummary(f: TxFilter = {}, opts: { today?: string; topCards?: number; topCategories?: number } = {}): Promise<TxSummary> {
+  const today = opts.today ?? localDate(new Date());
+  const { where, params } = buildWhere(f);
+  const prev = previousPeriod(f, today);
+  const range = effectiveRange(f);
+  const isToday = isTodayPeriod(f, today);
+  const noPeriod = { ...f, month: undefined, from: undefined, to: undefined };
+  const at = (from: string, to: string) => buildWhere({ ...noPeriod, from, to });
+
+  const [byCard, byCat, topPurchase, topMerchant, prevRows, avgRows] = await Promise.all([
+    query<{ id: number; name: string; issuer: TxSummary["cards"][number]["issuer"]; color: string; art: TxSummary["cards"][number]["art"]; n: number; cents: number; pn: number; pcents: number }>(
+      `SELECT c.id, c.name, c.issuer, c.color, c.art, COUNT(*) AS n, CAST(SUM(x.amount_cents) AS float) AS cents,
+              COUNT(CASE WHEN x.amount_cents > 0 THEN 1 END) AS pn, CAST(ISNULL(SUM(CASE WHEN x.amount_cents > 0 THEN x.amount_cents END), 0) AS float) AS pcents
+       ${FROM_BASE} WHERE ${where} GROUP BY c.id, c.name, c.issuer, c.color, c.art`,
+      params,
+    ),
+    query<{ id: number | null; name: string | null; color: string | null; n: number; cents: number }>(
+      `SELECT k.id, k.name, k.color, COUNT(*) AS n, CAST(SUM(x.amount_cents) AS float) AS cents
+       ${FROM_BASE} LEFT JOIN dbo.categories k ON k.id = x.category_id WHERE ${where} GROUP BY k.id, k.name, k.color`,
+      params,
+    ),
+    query<{ id: number; merchant: string; cents: number; d: string; card: string }>(
+      `SELECT TOP 1 x.id, x.merchant_raw AS merchant, CAST(x.amount_cents AS float) AS cents, CONVERT(char(10), x.occurred_date, 23) AS d, c.name AS card
+       ${FROM_BASE} WHERE ${where} AND x.amount_cents > 0 ORDER BY x.amount_cents DESC, x.occurred_at DESC, x.id DESC`,
+      params,
+    ),
+    query<{ merchant: string; n: number; cents: number }>(
+      `SELECT TOP 1 MIN(x.merchant_raw) AS merchant, COUNT(*) AS n, CAST(SUM(x.amount_cents) AS float) AS cents
+       ${FROM_BASE} WHERE ${where} GROUP BY x.merchant_normalized HAVING SUM(x.amount_cents) > 0 ORDER BY SUM(x.amount_cents) DESC, x.merchant_normalized`,
+      params,
+    ),
+    prev
+      ? (() => { const w = at(prev.from, prev.to); return query<{ n: number; cents: number }>(`SELECT COUNT(*) AS n, CAST(ISNULL(SUM(x.amount_cents), 0) AS float) AS cents ${FROM_BASE} WHERE ${w.where}`, w.params); })()
+      : Promise.resolve([] as { n: number; cents: number }[]),
+    isToday
+      ? (() => { const w = at(addDays(today, -30), addDays(today, -1)); return query<{ n: number; cents: number }>(`SELECT COUNT(*) AS n, CAST(ISNULL(SUM(x.amount_cents), 0) AS float) AS cents ${FROM_BASE} WHERE ${w.where}`, w.params); })()
+      : Promise.resolve([] as { n: number; cents: number }[]),
+  ]);
+
+  const count = byCard.reduce((a, r) => a + N(r.n), 0);
+  const totalCents = byCard.reduce((a, r) => a + N(r.cents), 0);
+  const purchaseCount = byCard.reduce((a, r) => a + N(r.pn), 0);
+  const purchaseCents = byCard.reduce((a, r) => a + N(r.pcents), 0);
+
+  const cardRank = rankShares(byCard.map((r) => ({ ...r, cents: N(r.cents), count: N(r.n) })), opts.topCards ?? 3);
+  const catRank = rankShares(byCat.map((r) => ({ id: r.id === null ? null : Number(r.id), name: r.name ?? "Sin categoría", color: catColor(r.color), cents: N(r.cents), count: N(r.n) })), opts.topCategories ?? 2);
+
+  const avg = avgRows.length ? dailyAverage(N(avgRows[0].cents), 30, N(avgRows[0].n)) : null;
+  return {
+    kind: f.kind ?? "expense",
+    totalCents, count, purchaseCount, purchaseCents,
+    refundCents: Math.max(0, purchaseCents - totalCents),
+    avgTicketCents: avgTicket(purchaseCents, purchaseCount),
+    cards: cardRank.top.map((r) => ({ id: Number(r.id), name: r.name, color: r.color, cents: r.cents, count: r.count, pct: r.pct, issuer: r.issuer, art: r.art ?? null })),
+    cardsRest: cardRank.rest,
+    categories: catRank.top,
+    topPurchase: topPurchase[0] ? { id: Number(topPurchase[0].id), merchant: topPurchase[0].merchant, cents: N(topPurchase[0].cents), date: topPurchase[0].d, card: topPurchase[0].card } : null,
+    topMerchant: topMerchant[0] ? { merchant: topMerchant[0].merchant, cents: N(topMerchant[0].cents), count: N(topMerchant[0].n) } : null,
+    period: range.from && range.to ? { from: range.from, to: range.to > today ? today : range.to } : null,
+    previous: prev ? { ...prev, totalCents: N(prevRows[0]?.cents), count: N(prevRows[0]?.n), comparison: compareTotals(totalCents, N(prevRows[0]?.cents)) } : null,
+    avg30: avg === null ? null : { avgCents: avg, diffCents: totalCents - avg, pct: avg > 0 ? ((totalCents - avg) / avg) * 100 : null },
+  };
 }
 
 export async function getTransaction(id: number): Promise<Transaction | null> {
