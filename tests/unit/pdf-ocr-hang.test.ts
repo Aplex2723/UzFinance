@@ -11,19 +11,19 @@ vi.mock("tesseract.js", async (orig) => {
 afterEach(() => vi.useRealTimers());
 
 describe("OCR con el motor colgado", () => {
-  it("falla con OcrError a los 30 s y el siguiente documento no queda atrás de uno atascado", async () => {
+  it("falla con OcrError cuando el motor no arranca a tiempo y el siguiente documento no queda atrás de uno atascado", async () => {
     vi.useFakeTimers();
     const { ocrPdf, OcrError } = await import("@/lib/pdf/ocr");
     const bytes = textPdf([["Hola"]]);
 
     const first = ocrPdf(bytes).catch((e) => e);
     const second = ocrPdf(bytes).catch((e) => e);
-    await vi.advanceTimersByTimeAsync(31_000);
+    await vi.advanceTimersByTimeAsync(121_000);
     const e1 = await first;
     expect(e1).toBeInstanceOf(OcrError);
     expect((e1 as Error).message).toContain("No se pudo iniciar el OCR");
 
-    await vi.advanceTimersByTimeAsync(31_000);
+    await vi.advanceTimersByTimeAsync(121_000);
     expect(await second).toBeInstanceOf(OcrError);
   });
 });

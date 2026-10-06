@@ -1,5 +1,6 @@
 import { channelOf, DOC_ORIGIN } from "@/lib/chat-sources";
 import { IntakeError, processDocument } from "@/lib/docs/intake";
+import { ocrPdf } from "@/lib/pdf/ocr";
 import { getTransaction } from "@/lib/repo/transactions";
 import { finishMessage, messageTxId } from "@/lib/repo/whatsapp";
 import { eligibleCards } from "./cards";
@@ -50,8 +51,17 @@ async function handlePdf(c: Ctx, io: WhatsAppIO): Promise<Outcome> {
   if (file.bytes.byteLength === 0) return { reply: R.PDF_EMPTY, status: "failed" };
   if (/^(image|audio|video|text)\//i.test(file.mimeType ?? "")) return { reply: R.PDF_NOT_PDF, status: "ignored" };
 
+  // Un PDF de solo imagen se lee con OCR: ~4 s con Azure Vision, pero ~2 min si cae al respaldo local. Si se alarga, se avisa para que no parezca perdido.
+  const ocr = async (bytes: Uint8Array) => {
+    const notice = setTimeout(() => void io.sendText(replyAddress(c.msg), R.PDF_READING).catch(() => undefined), c.deps.ocrNoticeMs ?? 8000);
+    try {
+      return await (c.deps.ocr ?? ((b: Uint8Array) => ocrPdf(b)))(bytes);
+    } finally {
+      clearTimeout(notice);
+    }
+  };
   try {
-    const r = await processDocument({ bytes: file.bytes, origin: DOC_ORIGIN[c.channel], filename: media.filename }, { categorizer: c.deps.categorizer, ocr: c.deps.ocr, now: c.deps.now });
+    const r = await processDocument({ bytes: file.bytes, origin: DOC_ORIGIN[c.channel], filename: media.filename }, { categorizer: c.deps.categorizer, ocr, now: c.deps.now });
     if (r.already) return { reply: R.pdfAlready(r, c.deps.appUrl), status: "done", documentId: r.documentId };
     const linked = (r.registered === "inserted" || r.registered === "merged") && r.txId ? r.txId : null;
     let tx: { cents: number; merchant: string; card: string } | null = null;

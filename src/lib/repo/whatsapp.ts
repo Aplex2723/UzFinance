@@ -130,12 +130,17 @@ export async function findUndoTarget(waId: string, windowMin = 30): Promise<Undo
 export async function undoRegistration(txId: number): Promise<"deleted" | "confirmed" | "missing"> {
   const docs = await query<{ id: number }>("SELECT id FROM dbo.documents WHERE tx_id=@tx AND kind='transfer_receipt'", { tx: t.big(txId) });
   await query("UPDATE dbo.whatsapp_messages SET undone=1 WHERE tx_id=@tx", { tx: t.big(txId) });
-  const gone = await query(`DELETE dbo.transactions OUTPUT DELETED.id WHERE id=@tx AND sources IN (${CHAT_SQL.undoable})`, { tx: t.big(txId) });
+  const gone = await query<{ id: number; plan_id: number | null }>(`DELETE dbo.transactions OUTPUT DELETED.id, DELETED.plan_id WHERE id=@tx AND sources IN (${CHAT_SQL.undoable})`, { tx: t.big(txId) });
   if (!gone.length) {
     const still = await query("SELECT 1 AS x FROM dbo.transactions WHERE id=@tx", { tx: t.big(txId) });
     return still.length ? "confirmed" : "missing";
   }
   for (const d of docs) await query("DELETE dbo.documents WHERE id=@id", { id: t.int(Number(d.id)) });
+  // Una compra a MSI capturada por el chat creó su plan: se va con ella (solo si es de captura manual y ya nadie más lo usa).
+  const plan = gone[0].plan_id;
+  if (plan !== null && plan !== undefined) {
+    await query("DELETE dbo.installment_plans WHERE id=@p AND source='manual' AND NOT EXISTS (SELECT 1 FROM dbo.transactions WHERE plan_id=@p)", { p: t.int(Number(plan)) });
+  }
   return "deleted";
 }
 

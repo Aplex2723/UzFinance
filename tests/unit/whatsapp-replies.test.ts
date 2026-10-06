@@ -23,8 +23,9 @@ describe("textos del bot", () => {
     expect(R.plain("x".repeat(500)).length).toBe(120);
   });
 
-  it("ayuda trae 3 ejemplos y los comandos", () => {
-    expect(R.HELP.match(/^• /gm)).toHaveLength(3);
+  it("ayuda trae 4 ejemplos (el último de MSI) y los comandos", () => {
+    expect(R.HELP.match(/^• /gm)).toHaveLength(4);
+    expect(R.HELP).toContain("msi");
     for (const c of ["tarjetas", "hoy", "resumen", "deshacer", "cancelar"]) expect(R.HELP).toContain(c);
   });
 
@@ -191,7 +192,7 @@ describe("dos canales: WhatsApp y Telegram", () => {
     expect(tg).toContain("/deshacer");
     expect(tg).toContain("En un grupo");
     for (const t of [wa, tg]) {
-      expect(t.match(/^• /gm)).toHaveLength(3);
+      expect(t.match(/^• /gm)).toHaveLength(4);
       for (const c of ["tarjetas", "hoy", "resumen", "deshacer", "cancelar"]) expect(t).toContain(c);
     }
     expect(R.help()).toBe(R.HELP);

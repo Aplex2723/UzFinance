@@ -157,8 +157,12 @@ Entrada única: `processDocument` (`src/lib/docs/intake.ts`). La usan `POST /api
 archivo no repite nada) y lo extraído (`documents.extracted`). Estados: `processed`, `needs_review`, `rejected`, `failed` (se reprocesa al
 volver a subirlo).
 
-- **Comprobante de transferencia** (PDF de la app de Banamex: el texto es imagen). OCR **local** (tesseract.js + `@napi-rs/canvas`,
-  idioma español empaquetado en `node_modules`; nada sale del servidor) y **doble lectura** a dos resoluciones: si monto, rastreo,
+- **Comprobante de transferencia** (PDF de la app de Banamex: el texto es imagen). OCR con **Azure AI Vision**
+  (`uzfinance-vision-092d5`, nivel gratuito F0 en South Central US —México Central no ofrece el servicio—, mismo grupo y tenant; la app
+  se autentica con su identidad administrada, rol *Cognitive Services User*, sin llaves; ≈1 s por página; solo se manda la imagen de la
+  página, es un OCR y no un LLM) y **doble lectura** a dos resoluciones. Si Azure falla, o no hay `AZURE_VISION_ENDPOINT` (laptop, pruebas),
+  cae al OCR **local** (tesseract.js + `@napi-rs/canvas`, idioma español empaquetado; nada sale del servidor, pero en B1 tarda ~100 s por
+  comprobante). Si la lectura pasa de 8 s el bot avisa «lo estoy leyendo». Cuota gratis: 5,000 lecturas/mes (≈4 por comprobante). Con la doble lectura: si monto, rastreo, si monto, rastreo,
   autorización, fecha o cuentas no coinciden, o el monto no trae centavos completos, no se registra solo (`needs_review`). Un PDF con
   texto se lee exacto. Solo transferencias *exitosas*; fechas futuras/muy viejas y montos > $1,000,000 piden confirmación.
   - El CONCEPTO que escribes es el comercio (se categoriza con reglas → historial → Jev; si no, *Transferencias*). Con el concepto genérico
@@ -346,6 +350,15 @@ Misma lógica que el bot de WhatsApp (gastos por texto, PDF, deshacer, resumen�
 de 24 h, funciona en grupos (opcional)** y puede recibir archivos de hasta 20 MB (el bot descarga PDF de hasta 12 MB). Solo responde a los IDs de
 `TELEGRAM_ALLOWED`; cualquier otro se ignora **sin respuesta** (la única excepción es el comando `/id`, que devuelve el ID de quien lo pide
 para poder configurarlo). Además manda los avisos de alertas a esas mismas personas (sección 9).
+
+**Compras a meses sin intereses (MSI).** Se escriben igual que un gasto, con los meses: `3820 amex beatriz a 3 msi`, `$12,000 amex iphone a 12
+meses sin intereses`, `5000 amex tele 12msi`, `800 amex cine en 3 mensualidades` (un «N meses» a secas solo cuenta si lo introduce «a/en/por»;
+«hace 2 meses» no). El monto es el **total** de la compra (si falta, el bot lo pregunta «en total»). Entra como cualquier compra —una vez,
+a precio completo— y además crea su plan en `/msi` (mensualidad = total ÷ meses; de 2 a 48 meses; solo tarjetas de crédito: en débito el bot
+no registra nada). El primer cobro se calcula con el **corte** de esa tarjeta, deducido de los estados ya cargados (`recon_runs` y planes de
+estado de cuenta); sin ninguno, el bot lo dice y las fechas son aproximadas hasta cargar un estado. El plan queda con `source='manual'`:
+*deshacer* lo borra junto con el gasto, y el primer estado de cuenta que traiga la misma compra (misma tarjeta, monto, meses y fecha ±45 días,
+aunque el comercio se llame distinto) lo **adopta** en vez de duplicarlo, conservando el nombre que le pusiste (`upsertPlan`).
 
 **Cómo funciona.** Telegram llama a `POST /api/telegram` por cada mensaje que le escriben al bot:
 

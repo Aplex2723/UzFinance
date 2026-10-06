@@ -1,3 +1,4 @@
+import { MSI_MAX, MSI_MIN } from "@/lib/msi";
 import { addDays, daysBetween, isRealDate, ymd } from "./when";
 import { endsWithLast4, fold, matchCards, namesCardBefore, type CardLite } from "./cards";
 
@@ -32,6 +33,8 @@ export type Parsed =
       cardIds: number[];
       unmatchedHint: string | null;
       date: DateSel;
+      /** Compra a meses sin intereses ("a 3 msi", "6 meses sin intereses"): número de mensualidades; null si no es a MSI. El monto es el TOTAL. */
+      installments: number | null;
     };
 
 /** Motivo por el que un número no se tomó como monto sin preguntar. */
@@ -70,7 +73,7 @@ const isFree = (mask: boolean[], a: number, b: number) => {
 type NumError = "ambiguous" | "zero" | "negative" | "big" | "mil";
 /** `kind`: "installments" = cifra de meses sin intereses (no es monto); "qty" = cantidad o duración ("20 minutos", "3 personas"): no es monto;
  *  "mil" = "mil 500" (¿1,000, 1,500, 500?): se pregunta. */
-type Tok = { span: Span; raw: string; cents: number | null; error: NumError | null; marked: boolean; plainInt: string | null; kind?: "installments" | "mil" | "qty" };
+type Tok = { span: Span; raw: string; cents: number | null; error: NumError | null; marked: boolean; plainInt: string | null; kind?: "installments" | "mil" | "qty"; /** Solo en "installments" que SÍ piden plan a meses: la cifra leída. */ months?: number };
 
 const WORD_NUM: Record<string, number> = { dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, quince: 15, veinte: 20, treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90, cien: 100 };
 const UNIT_GLUED = /^(k|mil|millones|millon|mxn|mn|m\.n\.?|pesos|peso)(?![\p{L}\p{N}])/u;
@@ -115,7 +118,13 @@ function findNumbers(f: string, original: string, mask: boolean[]): Tok[] {
     const inst = INSTALLMENTS.exec(rest);
     if (inst) {
       end += inst[0].length;
-      toks.push({ span: [start, end], raw: original.slice(start, end).trim(), cents: null, error: null, marked: false, plainInt: null, kind: "installments" });
+      // "msi", "mensualidades" y "meses sin intereses" piden un plan. Un "N meses" a secas solo si lo introduce "a/en/por" ("a 6 meses"):
+      // "hace 2 meses" o "dura 3 meses" no son una compra a meses. Sin eso la cifra solo se descarta como monto, como siempre.
+      const word = /^\s*(\p{L}+)/u.exec(inst[0])![1];
+      const strong = word === "msi" || word.startsWith("mensualidad") || /sin\s+intereses/u.test(inst[0]);
+      const intro = /(?:^|\s)(?:a|en|por|a\s+los)\s+(?:los\s+)?$/u.test(f.slice(Math.max(0, start - 10), start)) && !/hace\s+$/u.test(f.slice(Math.max(0, start - 10), start));
+      const months = (strong || intro) && /^\d{1,3}$/.test(num) && !hasDollar ? Number(num) : undefined;
+      toks.push({ span: [start, end], raw: original.slice(start, end).trim(), cents: null, error: null, marked: false, plainInt: null, kind: "installments", months });
       continue;
     }
     if (!hasDollar && QTY.test(rest)) {
@@ -460,6 +469,14 @@ export function parseExpense(raw: string, ctx: ParseCtx): Parsed {
   if (read.kind === "reject") return read;
   if (read.kind === "none" && !times.length) return { kind: "none" };
 
+  const planned = toks.filter((t) => t.kind === "installments" && t.months !== undefined);
+  let installments: number | null = null;
+  if (planned.length) {
+    if (new Set(planned.map((t) => t.months)).size > 1) return { kind: "reject", reason: "Veo más de una cifra de meses. Escribe una sola, por ejemplo: 3820 amex beatriz a 3 msi" };
+    installments = planned[0].months!;
+    if (installments < MSI_MIN || installments > MSI_MAX) return { kind: "reject", reason: `Las compras a meses sin intereses son de ${MSI_MIN} a ${MSI_MAX} mensualidades. Si no es a MSI, quita esa parte del mensaje.` };
+  }
+
   const marked = toks.some((t) => t.marked);
 
   if (hintTok) claim(mask, hintTok.span);
@@ -495,6 +512,7 @@ export function parseExpense(raw: string, ctx: ParseCtx): Parsed {
     cardIds: match.ids,
     unmatchedHint: match.unmatchedHint,
     date: date.kind === "ok" ? date.date : { kind: "today" },
+    installments,
   };
 }
 

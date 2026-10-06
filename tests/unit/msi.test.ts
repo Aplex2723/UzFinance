@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonthsIso, billDate, buildMsiMessages, buildSchedule, installmentsNow, projectPlan, startedByMonth, summarize, type PlanLike } from "@/lib/msi";
+import { addMonthsIso, billDate, buildMsiMessages, buildSchedule, installmentsNow, newPlanTiming, projectPlan, startedByMonth, summarize, type PlanLike } from "@/lib/msi";
 
 const plan = (o: Partial<PlanLike> = {}): PlanLike => ({
   id: 1, cardId: 1, cardName: "Tarjeta A", merchant: "TIENDA UNO", kind: "purchase", withInterest: false,
@@ -110,5 +110,30 @@ describe("summarize + buildMsiMessages", () => {
   it("avisa (warn) cuando la carga pasa del 30% del ingreso", () => {
     const heavy = summarize([plan({ monthlyCents: 120_000_00, nCurrent: 5, nTotal: 12 })], 350_000_00, "2026-10-02");
     expect(buildMsiMessages(heavy)[0].tone).toBe("warn");
+  });
+});
+
+describe("newPlanTiming (compra nueva a MSI)", () => {
+  it("el plan nace al corte que cierra el periodo de la compra", () => {
+    // corte el 25: compra el 4-oct → periodo 26-sep…25-oct → cierra el 25-oct
+    expect(newPlanTiming("2026-10-04", "2026-09-25")).toEqual({ asOf: "2026-10-25", guessed: false });
+    // compra el 30-sep, ya después del corte del 25 → cierra el 25-oct
+    expect(newPlanTiming("2026-09-30", "2026-09-25")).toEqual({ asOf: "2026-10-25", guessed: false });
+    // compra el día del corte entra al estado que cierra ese día
+    expect(newPlanTiming("2026-09-25", "2026-09-25")).toEqual({ asOf: "2026-09-25", guessed: false });
+    expect(newPlanTiming("2026-09-26", "2026-09-25")).toEqual({ asOf: "2026-10-25", guessed: false });
+  });
+  it("sirve con un corte anterior o posterior a la compra, y cruza de año", () => {
+    expect(newPlanTiming("2026-10-04", "2026-03-25").asOf).toBe("2026-10-25"); // el ancla es de meses atrás
+    expect(newPlanTiming("2026-10-04", "2027-01-25").asOf).toBe("2026-10-25"); // el ancla es futura (plan de un estado que cierra después)
+    expect(newPlanTiming("2026-12-28", "2026-12-25").asOf).toBe("2027-01-25");
+  });
+  it("sin ningún corte conocido supone que la compra cae en el corte y lo avisa", () => {
+    expect(newPlanTiming("2026-10-04", null)).toEqual({ asOf: "2026-11-04", guessed: true });
+  });
+  it("el primer cobro cae al inicio del periodo de la compra, igual que el importador", () => {
+    const { asOf } = newPlanTiming("2026-10-04", "2026-09-25");
+    expect(billDate({ asOf, nCurrent: 1 }, 1)).toBe("2026-09-26");
+    expect(billDate({ asOf, nCurrent: 1 }, 3)).toBe("2026-11-26");
   });
 });

@@ -28,6 +28,7 @@ export function help(channel: ChatChannel = "whatsapp"): string {
     "• 350 starbucks amex",
     "• ayer 450 oxxo débito",
     "• gasté $1,200.50 en gasolina con la explora",
+    "• 3820 amex beatriz a 3 msi (compra a meses sin intereses: el monto es el total)",
     "",
     "También leo comprobantes de transferencia y estados de cuenta en PDF.",
     "Comandos: *tarjetas*, *hoy*, *resumen*, *deshacer*, *cancelar*.",
@@ -59,8 +60,8 @@ export function cardsList(cards: CardLite[]): string {
   return ["💳 Tus tarjetas activas:", ...cards.map((c) => `• ${plain(cardLabel(c))}`), "", "Escríbeme el gasto y el nombre de la tarjeta, por ejemplo: *350 starbucks amex*."].join("\n");
 }
 
-export type Summary = { merchant: string | null; cents: number | null };
-const what = (s: Summary) => [s.cents ? money(s.cents) : null, s.merchant ? plain(s.merchant) : null].filter(Boolean).join(" · ");
+export type Summary = { merchant: string | null; cents: number | null; /** Compra a meses sin intereses: número de mensualidades. */ msi?: number | null };
+const what = (s: Summary) => [s.cents ? money(s.cents) : null, s.msi ? `a ${s.msi} MSI` : null, s.merchant ? plain(s.merchant) : null].filter(Boolean).join(" · ");
 
 const int = (digits: string) => `$${Number(digits).toLocaleString("en-US")}`;
 /** "$7" si son pesos exactos, "$12.50" si no. */
@@ -106,8 +107,19 @@ export const askDuplicate = (existing: { merchant: string; cents: number; when: 
 
 export const retry = (question: string, why?: string) => `${why ?? "No te entendí."} ${question}`;
 
-export function registered(o: { cents: number; merchant: string; card: string; when: string; category: string | null }): string {
-  return `✅ Registrado: ${money(o.cents)} · ${plain(o.merchant)} · ${plain(o.card)} · ${o.when} · ${o.category ? `Categoría ${plain(o.category)}` : "Sin categoría"}. Responde *deshacer* si no es correcto.`;
+/** Plan de MSI creado junto con el gasto. */
+export type MsiInfo = { n: number; monthlyCents: number; ok: boolean; /** No se conoce el corte de la tarjeta: las fechas de cobro son aproximadas. */ guessed: boolean };
+
+export const msiNotForDebit = (card: string) => `${plain(card)} es una tarjeta de débito y los meses sin intereses solo aplican a crédito. No registré nada; mándalo de nuevo con la tarjeta de crédito o sin «msi».`;
+
+export function registered(o: { cents: number; merchant: string; card: string; when: string; category: string | null; msi?: MsiInfo | null }): string {
+  const head = `✅ Registrado: ${money(o.cents)} · ${plain(o.merchant)} · ${plain(o.card)} · ${o.when} · ${o.category ? `Categoría ${plain(o.category)}` : "Sin categoría"}.`;
+  const tail = "Responde *deshacer* si no es correcto.";
+  const m = o.msi;
+  if (!m) return `${head} ${tail}`;
+  if (!m.ok) return `${head} Pero no pude crear el plan a ${m.n} MSI: agrégalo desde la app (MSI). ${tail}`;
+  const plan = `📆 A ${m.n} meses sin intereses: ${m.n} pagos de ${money(m.monthlyCents)}. Ya aparece en MSI.${m.guessed ? " (No conozco el corte de esa tarjeta: las fechas de cobro son aproximadas; se afinan al cargar su estado de cuenta.)" : ""}`;
+  return `${head}\n${plan}\n${tail}`;
 }
 
 export const alreadyRegistered = () => SAME_TWICE;
@@ -134,6 +146,7 @@ export const PDF_TOO_BIG = "El PDF pesa demasiado (máximo 12 MB). Súbelo desde
 export const PDF_DOWNLOAD_FAILED = "No pude descargar el archivo. Intenta mandarlo de nuevo.";
 export const PDF_INVALID = "Ese archivo no parece un PDF válido. Mándalo de nuevo como PDF.";
 export const PDF_EMPTY = "El archivo llegó vacío. Mándalo de nuevo.";
+export const PDF_READING = "📄 Recibí el comprobante. Lo estoy leyendo, dame un momento…";
 export const PDF_FAILED = "No pude procesar el PDF. Inténtalo de nuevo en un momento o súbelo desde la app.";
 
 const link = (appUrl: string | undefined, id: number) => (appUrl ? `\n${appUrl.replace(/\/+$/, "")}/documentos/${id}` : "");

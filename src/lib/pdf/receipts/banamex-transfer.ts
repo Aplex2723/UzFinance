@@ -134,16 +134,22 @@ export function parseBanamexTransfer(text: string): TransferParse {
   const iDest = lines.findIndex((l) => /^cuenta destino/i.test(fold(l)));
   if (iDest < 0) return { kind: "unparsed", reason: "faltan las cuentas de origen o destino" };
   // El OCR a veces pierde la etiqueta "Cuenta origen": la cuenta de origen es entonces la línea con ** que precede a "Cuenta destino".
-  const originLine = iOrigin >= 0 ? lines[iOrigin + 1] : [...lines.slice(0, iDest)].reverse().find((l) => accountLine(l));
+  // Entre la etiqueta y la cuenta puede colarse texto suelto de la miniatura de la tarjeta ("# Banamex"): se toma la primera línea con **.
+  const originLine =
+    iOrigin >= 0 && iOrigin < iDest
+      ? lines.slice(iOrigin + 1, iDest).find((l) => accountLine(l))
+      : [...lines.slice(0, iDest)].reverse().find((l) => accountLine(l));
   const origin = accountLine(originLine ?? null);
   if (!origin) return { kind: "unparsed", reason: "no se leyó la cuenta de origen" };
-  const destLine = lines[iDest + 1] ? stripAvatar(lines[iDest + 1]) : null;
+  // La inicial del beneficiario (avatar) puede venir antes del nombre, en la misma línea ("E Empor Cristhian") o sola en la anterior ("J").
+  const iDestLine = lines[iDest + 1] && /^\S$/.test(lines[iDest + 1]) ? iDest + 2 : iDest + 1;
+  const destLine = lines[iDestLine] ? stripAvatar(lines[iDestLine]) : null;
   const dest = accountLine(destLine);
-  const bankName = lines[iDest + 2] && !/^datos de la transferencia/i.test(fold(lines[iDest + 2])) ? lines[iDest + 2] : null;
+  const bankName = lines[iDestLine + 1] && !/^datos de la transferencia/i.test(fold(lines[iDestLine + 1])) ? lines[iDestLine + 1] : null;
   let destBank: string | null = null;
   let destName: string | null = null;
   if (bankName) {
-    const parts = bankName.split(/\s[·•:;|\-–]\s/);
+    const parts = bankName.split(/\s[·•.:;|\-–]\s/);
     destBank = parts.length > 1 ? parts[0].trim().slice(0, 60) : null;
     destName = (parts.length > 1 ? parts.slice(1).join(" - ") : bankName).replace(/\s*\*+\s*$/, "").trim().slice(0, 120) || null;
   }

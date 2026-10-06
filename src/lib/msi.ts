@@ -241,3 +241,26 @@ export function buildMsiMessages(s: MsiSummary): InsightMessage[] {
 
   return out.slice(0, 7);
 }
+
+/** Rango de mensualidades que acepta el bot para una compra nueva a MSI. */
+export const MSI_MIN = 2;
+export const MSI_MAX = 48;
+
+/**
+ * Fechas del plan de una compra NUEVA a MSI hecha el día `purchase`, igual que el importador de estados de cuenta: la mensualidad 1 se
+ * carga al inicio del periodo en que se hizo la compra, así que el plan nace "al corte que cierra ese periodo" con 1 mensualidad.
+ * `cutAnchor` es cualquier corte conocido de la tarjeta (fin de un estado, `as_of` de un plan): los cortes son ese mismo día de cada mes.
+ * Sin ningún corte conocido se supone que la compra cae justo en el corte (`guessed`: las fechas futuras son aproximadas).
+ */
+export function newPlanTiming(purchase: string, cutAnchor: string | null): { asOf: string; guessed: boolean } {
+  if (!cutAnchor) return { asOf: addMonthsIso(purchase, 1), guessed: true };
+  const a = parse(cutAnchor);
+  const p = parse(purchase);
+  const k = p.y * 12 + p.m - (a.y * 12 + a.m);
+  // El último corte ESTRICTAMENTE anterior a la compra (una compra el mismo día del corte entra al estado que cierra ese día).
+  for (let j = k + 1; j >= k - 2; j--) {
+    const cut = addMonthsIso(cutAnchor, j);
+    if (cut < purchase) return { asOf: addMonthsIso(cut, 1), guessed: false };
+  }
+  return { asOf: addMonthsIso(purchase, 1), guessed: true };
+}

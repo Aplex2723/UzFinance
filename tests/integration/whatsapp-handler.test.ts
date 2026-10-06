@@ -9,6 +9,7 @@ import { createCard } from "@/lib/repo/cards";
 import { createCategory } from "@/lib/repo/categories";
 import { createDocument } from "@/lib/repo/documents";
 import { ingestBankEmail } from "@/lib/repo/emails";
+import { upsertPlan } from "@/lib/repo/plans";
 import { createRule } from "@/lib/repo/rules";
 import { getMonthlyIncome, setMonthlyIncome } from "@/lib/repo/settings";
 import { getTransaction, ingestTransaction, listTransactions } from "@/lib/repo/transactions";
@@ -556,6 +557,102 @@ describe("comandos", () => {
   });
 });
 
+type PlanRow = { id: number; merchant: string; original: number; monthly: number; pending: number; n_total: number; n_current: number; as_of: string; started_on: string; source: string; card: string };
+const plans = async () =>
+  (await query<PlanRow>(
+    `SELECT p.id, p.merchant, CAST(p.original_cents AS float) AS original, CAST(p.monthly_cents AS float) AS monthly, CAST(p.pending_cents AS float) AS pending, p.n_total, p.n_current,
+            CONVERT(char(10), p.as_of, 23) AS as_of, CONVERT(char(10), p.started_on, 23) AS started_on, p.source, c.name AS card
+     FROM dbo.installment_plans p JOIN dbo.cards c ON c.id = p.card_id ORDER BY p.id`,
+  )).map((r) => ({ ...r, id: Number(r.id) }));
+const planOf = async (txId: number) => (await query<{ plan_id: number | null }>(`SELECT plan_id FROM dbo.transactions WHERE id=${txId}`))[0]?.plan_id ?? null;
+
+describe("compra a meses sin intereses (MSI) por chat", () => {
+  it("«3820 AMEX beatriz a 3 msi»: gasto completo + plan ligado, y avisa las mensualidades", async () => {
+    const r = await tgSay("3820 AMEX beatriz a 3 msi");
+    expect(r).toContain("✅ Registrado: $3,820.00 · Beatriz · Amex Platinum");
+    expect(r).toContain("A 3 meses sin intereses: 3 pagos de $1,273.33");
+    expect(r).toContain("No conozco el corte"); // sin estados de cuenta cargados
+    const [t] = await txs();
+    expect(t).toMatchObject({ merchant: "Beatriz", cents: 382_000, card: "Amex Platinum" });
+    const [p] = await plans();
+    expect(p).toMatchObject({ merchant: "Beatriz", original: 382_000, monthly: 127_333, pending: 254_667, n_total: 3, n_current: 1, source: "manual", card: "Amex Platinum", started_on: "2026-10-04" });
+    expect(await planOf(t.id)).toBe(p.id);
+  });
+
+  it("con un corte conocido de la tarjeta el primer cobro cae en el periodo de la compra", async () => {
+    const amex = (await query<{ id: number }>("SELECT id FROM dbo.cards WHERE name='Amex Platinum'"))[0].id;
+    await upsertPlan({ cardId: amex, merchant: "OTRA COSA", originalCents: 600_000, monthlyCents: 100_000, pendingCents: 300_000, nTotal: 6, nCurrent: 3, asOf: "2026-09-25", startedOn: "2026-07-10", source: "statement" });
+    const r = await tgSay("3820 amex beatriz a 3 msi");
+    expect(r).not.toContain("No conozco el corte");
+    const p = (await plans()).find((x) => x.merchant === "Beatriz")!;
+    expect(p.as_of).toBe("2026-10-25"); // compra el 4-oct, corte del 25 → cierra el 25-oct
+  });
+
+  it("sin MSI no se crea plan", async () => {
+    await tgSay("350 starbucks amex");
+    expect(await plans()).toHaveLength(0);
+  });
+
+  it("el débito no tiene MSI: no registra nada", async () => {
+    const r = await tgSay("500 oxxo débito a 3 msi");
+    expect(r).toContain("débito");
+    expect(r).toContain("No registré nada");
+    expect(await txs()).toHaveLength(0);
+    expect(await plans()).toHaveLength(0);
+  });
+
+  it("si falta el monto lo pregunta (total) y conserva los meses", async () => {
+    expect(await tgSay("beatriz amex a 3 msi")).toContain("en total");
+    const r = await tgSay("3820");
+    expect(r).toContain("A 3 meses sin intereses");
+    expect((await plans())[0]).toMatchObject({ original: 382_000, n_total: 3 });
+  });
+
+  it("monto alto: la confirmación recuerda que es a MSI", async () => {
+    const q = await tgSay("25000 amex laptop a 12 msi");
+    expect(q).toContain("a 12 MSI");
+    expect(await plans()).toHaveLength(0);
+    expect(await tgSay("sí")).toContain("12 pagos de $2,083.33");
+    expect(await plans()).toHaveLength(1);
+  });
+
+  it("deshacer borra el gasto Y su plan", async () => {
+    await tgSay("3820 amex beatriz a 3 msi");
+    expect(await plans()).toHaveLength(1);
+    expect(await tgSay("deshacer")).toContain("Deshecho");
+    expect(await txs()).toHaveLength(0);
+    expect(await plans()).toHaveLength(0);
+  });
+
+  it("deshacer no borra un plan de estado de cuenta ni uno que otra compra sigue usando", async () => {
+    await tgSay("3820 amex beatriz a 3 msi");
+    const [p] = await plans();
+    await query("UPDATE dbo.installment_plans SET source='statement' WHERE id=@id".replace("@id", String(p.id)));
+    await tgSay("deshacer");
+    expect(await plans()).toHaveLength(1);
+  });
+
+  it("el estado de cuenta que trae la misma compra adopta el plan en vez de duplicarlo (aunque el comercio se llame distinto)", async () => {
+    await tgSay("3820 amex beatriz a 3 msi");
+    const [mine] = await plans();
+    const amex = (await query<{ id: number }>("SELECT id FROM dbo.cards WHERE name='Amex Platinum'"))[0].id;
+    const r = await upsertPlan({ cardId: amex, merchant: "MERCADO PAGO*BEATRIZ", originalCents: 382_000, monthlyCents: 127_333, pendingCents: 127_334, nTotal: 3, nCurrent: 2, asOf: "2026-11-25", startedOn: "2026-10-06", source: "statement" });
+    expect(r).toEqual({ id: mine.id, status: "updated" });
+    const all = await plans();
+    expect(all).toHaveLength(1);
+    expect(all[0]).toMatchObject({ merchant: "Beatriz", source: "statement", n_current: 2, as_of: "2026-11-25" });
+    // y el siguiente estado actualiza ese mismo plan por su llave nueva
+    expect((await upsertPlan({ cardId: amex, merchant: "MERCADO PAGO*BEATRIZ", originalCents: 382_000, monthlyCents: 127_333, pendingCents: 0, nTotal: 3, nCurrent: 3, asOf: "2026-12-25", startedOn: "2026-10-06", source: "statement" })).id).toBe(mine.id);
+  });
+
+  it("otra compra con monto o meses distintos NO se adopta", async () => {
+    await tgSay("3820 amex beatriz a 3 msi");
+    const amex = (await query<{ id: number }>("SELECT id FROM dbo.cards WHERE name='Amex Platinum'"))[0].id;
+    await upsertPlan({ cardId: amex, merchant: "OTRA", originalCents: 382_000, monthlyCents: 63_667, pendingCents: 318_333, nTotal: 6, nCurrent: 1, asOf: "2026-11-25", startedOn: "2026-10-06", source: "statement" });
+    expect(await plans()).toHaveLength(2);
+  });
+});
+
 describe("deshacer", () => {
   it("borra el último gasto de ese remitente y confirma con comercio y monto; no se puede deshacer dos veces", async () => {
     await say("350 starbucks amex");
@@ -865,6 +962,29 @@ describe("PDF", () => {
     const d = await docs();
     expect(d).toMatchObject([{ status: "processed", kind: "transfer_receipt", origin: "whatsapp" }]);
     expect(await msgRow(id)).toMatchObject([{ status: "done", tx_id: t[0].id, document_id: d[0].id }]);
+  }, 60_000);
+
+  it("si el OCR se alarga avisa «lo estoy leyendo» ANTES de la respuesta final; si es rápido no manda nada extra", async () => {
+    const slow = async (): Promise<OcrResult> => {
+      await new Promise((r) => setTimeout(r, 300));
+      return same()();
+    };
+    serve("f1", pdfBytes("a"));
+    const send = (ocr: (b: Uint8Array) => Promise<OcrResult>, noticeMs: number, mediaId = "f1") =>
+      (async () => {
+        const msg: InboundMessage = { id: `wamid.${++seq}`, from: ANA, timestamp: Math.floor(Date.now() / 1000), type: "document", media: { id: mediaId, mimeType: "application/pdf", filename: "c.pdf" } };
+        await claimMessage(msg.id, ANA, "document");
+        await handleInbound(msg, { waId: ANA, name: "Ana" }, io, { categorizer: new RulesCategorizer(), appUrl: APP, ocr, ocrNoticeMs: noticeMs });
+      })();
+    await send(slow, 50);
+    const bodies = io.sent.map((m) => m.body);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toContain("Lo estoy leyendo");
+    expect(bodies[1]).toContain("✅ Registré la transferencia");
+    io.sent.length = 0;
+    serve("f2", pdfBytes("b"));
+    await send(same(), 5_000, "f2"); // otro archivo, lectura instantánea y aviso a 5 s: nunca se manda
+    expect(io.sent.map((m) => m.body).some((b) => b.includes("Lo estoy leyendo"))).toBe(false);
   }, 60_000);
 
   it("repetido (misma huella): idempotente, no duplica nada y no se vuelve a ligar el movimiento", async () => {

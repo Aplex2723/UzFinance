@@ -26,6 +26,35 @@ const rej = (t: string, today = TODAY) => {
   return r.reason;
 };
 
+describe("compras a meses sin intereses", () => {
+  it.each([
+    ["3820 AMEX beatriz a 3 msi", 3820_00, 3, "Beatriz", [1]],
+    ["3820 amex beatriz 3 msi", 3820_00, 3, "Beatriz", [1]],
+    ["$12,000 amex iphone a 12 meses sin intereses", 12_000_00, 12, "Iphone", [1]],
+    ["amex 1500 liverpool a 6 meses", 1500_00, 6, "Liverpool", [1]],
+    ["5000 amex tele 12msi", 5000_00, 12, "Tele", [1]],
+    ["800 amex cine en 3 mensualidades", 800_00, 3, "Cine", [1]],
+  ])("«%s» → monto TOTAL, %i mensualidades", (text, cents, n, merchant, ids) => {
+    expect(exp(text)).toMatchObject({ amountCents: cents, installments: n, merchant, cardIds: ids, amountNote: null });
+  });
+
+  it("sin MSI el campo es null; «hace 2 meses» o «dura 3 meses» no piden plan", () => {
+    expect(exp("350 starbucks amex").installments).toBeNull();
+    expect(exp("350 starbucks amex hace 2 meses").installments).toBeNull();
+    expect(exp("350 gimnasio amex dura 3 meses").installments).toBeNull();
+  });
+
+  it("falta el monto: se conserva el número de meses y se pregunta el total", () => {
+    expect(exp("beatriz a 3 msi")).toMatchObject({ amountCents: null, installments: 3, amountNote: { kind: "installments" }, merchant: "Beatriz" });
+  });
+
+  it("solo de 2 a 48 mensualidades y una sola cifra de meses", () => {
+    expect(rej("1000 amex x a 1 msi")).toContain("2 a 48");
+    expect(rej("1000 amex x a 60 msi")).toContain("2 a 48");
+    expect(rej("3820 amex 3 msi 6 msi x")).toContain("más de una cifra de meses");
+  });
+});
+
 describe("ejemplos del usuario", () => {
   it.each([
     ["350 starbucks amex", 35000, "Starbucks", [1]],

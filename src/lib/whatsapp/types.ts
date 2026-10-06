@@ -49,6 +49,8 @@ export type HandleDeps = {
   now?: Date;
   /** Base de la app para los enlaces (https://…, sin barra final). Si no viene, se omiten los enlaces. */
   appUrl?: string;
+  /** Solo pruebas: cuánto esperar (ms) antes de avisar «lo estoy leyendo». Por omisión 8 s. */
+  ocrNoticeMs?: number;
   /** Solo pruebas: OCR de los comprobantes en PDF de imagen (por omisión, el OCR local real). */
   ocr?: (bytes: Uint8Array) => Promise<import("@/lib/pdf/ocr").OcrResult>;
 };

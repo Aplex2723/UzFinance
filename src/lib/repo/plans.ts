@@ -22,6 +22,8 @@ export type PlanInput = {
   /** YYYY-MM-DD de la compra. */
   startedOn: string;
   startedEstimated?: boolean;
+  /** 'manual' = capturada a mano (p. ej. por el bot); el primer estado de cuenta que traiga la misma compra la adopta. */
+  source?: "statement" | "manual";
 };
 
 /**
@@ -44,6 +46,24 @@ export async function upsertPlan(p: PlanInput): Promise<{ id: number; status: "c
   if (!(p.originalCents > 0 && p.monthlyCents >= 0 && p.pendingCents >= 0)) throw new RangeError("montos inválidos");
   const key = planKey(p);
   const existing = await query<{ id: number; as_of: Date }>("SELECT id, as_of FROM dbo.installment_plans WHERE dedupe_key=@k", { k: t.char(key) });
+  if (!existing[0] && (p.source ?? "statement") === "statement") {
+    // ¿Es la compra que ya se capturó a mano (bot)? Mismo plan aunque el comercio se llame distinto en el estado de cuenta: misma tarjeta,
+    // monto original, número de mensualidades y una fecha de compra cercana. Se conserva el nombre que le puso la persona.
+    const manual = await query<{ id: number }>(
+      `SELECT TOP 1 id FROM dbo.installment_plans
+       WHERE source='manual' AND card_id=@c AND original_cents=@o AND n_total=@n AND kind=@kind AND ABS(DATEDIFF(day, started_on, @start)) <= 45
+       ORDER BY ABS(DATEDIFF(day, started_on, @start)), id`,
+      { c: t.int(p.cardId), o: t.big(p.originalCents), n: t.int(p.nTotal), kind: t.varchar(p.kind ?? "purchase"), start: t.date(p.startedOn) },
+    );
+    if (manual[0]) {
+      await query(
+        `UPDATE dbo.installment_plans SET dedupe_key=@k, source='statement', monthly_cents=@mo, pending_cents=@pe, n_current=@nc, as_of=@asof, rate_pct=@rate,
+           with_interest=@wi, updated_at=SYSUTCDATETIME() WHERE id=@id`,
+        { id: t.int(manual[0].id), k: t.char(key), mo: t.big(p.monthlyCents), pe: t.big(p.pendingCents), nc: t.int(p.nCurrent), asof: t.date(p.asOf), rate: t.dec2(p.ratePct ?? null), wi: t.bit(!!p.withInterest) },
+      );
+      return { id: Number(manual[0].id), status: "updated" };
+    }
+  }
   if (existing[0]) {
     if (existing[0].as_of.toISOString().slice(0, 10) > p.asOf) return { id: existing[0].id, status: "stale" };
     await query(
@@ -58,17 +78,34 @@ export async function upsertPlan(p: PlanInput): Promise<{ id: number; status: "c
   }
   const r = await query<{ id: number }>(
     `INSERT dbo.installment_plans (card_id, category_id, merchant, merchant_normalized, kind, with_interest, rate_pct, original_cents, monthly_cents, pending_cents,
-                                   n_total, n_current, as_of, started_on, started_estimated, dedupe_key)
+                                   n_total, n_current, as_of, started_on, started_estimated, source, dedupe_key)
      OUTPUT INSERTED.id
-     VALUES (@card, @cat, @m, @mn, @kind, @wi, @rate, @orig, @mo, @pe, @nt, @nc, @asof, @start, @est, @k)`,
+     VALUES (@card, @cat, @m, @mn, @kind, @wi, @rate, @orig, @mo, @pe, @nt, @nc, @asof, @start, @est, @src, @k)`,
     {
       card: t.int(p.cardId), cat: t.int(p.categoryId ?? null), m: t.str(p.merchant.slice(0, 200)), mn: t.str(normalizeMerchant(p.merchant)),
       kind: t.varchar(p.kind ?? "purchase"), wi: t.bit(!!p.withInterest), rate: t.dec2(p.ratePct ?? null),
       orig: t.big(p.originalCents), mo: t.big(p.monthlyCents), pe: t.big(p.pendingCents), nt: t.int(p.nTotal), nc: t.int(p.nCurrent),
-      asof: t.date(p.asOf), start: t.date(p.startedOn), est: t.bit(!!p.startedEstimated), k: t.char(key),
+      asof: t.date(p.asOf), start: t.date(p.startedOn), est: t.bit(!!p.startedEstimated), src: t.varchar(p.source ?? "statement"), k: t.char(key),
     },
   );
   return { id: Number(r[0].id), status: "created" };
+}
+
+/** Liga una compra ya guardada a su plan de MSI. */
+export async function linkTransactionPlan(txId: number, planId: number): Promise<void> {
+  await query("UPDATE dbo.transactions SET plan_id=@p WHERE id=@tx", { p: t.int(planId), tx: t.big(txId) });
+}
+
+/** Un corte conocido de la tarjeta (fin de un estado conciliado o fecha de corte de un plan de estado de cuenta), el más reciente; null si no hay ninguno. */
+export async function cardCutAnchor(cardId: number): Promise<string | null> {
+  const r = await query<{ d: string | null }>(
+    `SELECT TOP 1 CONVERT(char(10), d, 23) AS d FROM (
+       SELECT period_end AS d FROM dbo.recon_runs WHERE card_id=@c
+       UNION ALL SELECT as_of FROM dbo.installment_plans WHERE card_id=@c AND source='statement'
+     ) x ORDER BY d DESC`,
+    { c: t.int(cardId) },
+  );
+  return r[0]?.d ?? null;
 }
 
 type Row = {

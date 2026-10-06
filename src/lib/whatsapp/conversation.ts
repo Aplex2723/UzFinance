@@ -2,7 +2,9 @@ import { getCategorizer } from "@/lib/categorizer";
 import { CHANNEL_NAME, chatSourceTag, type ChatChannel } from "@/lib/chat-sources";
 import { normalizeMerchant } from "@/lib/merchant";
 import { scheduleTransactionAlerts } from "@/lib/alerts/schedule";
+import { newPlanTiming } from "@/lib/msi";
 import { listCategories } from "@/lib/repo/categories";
+import { cardCutAnchor, linkTransactionPlan, upsertPlan } from "@/lib/repo/plans";
 import { dedupeHash, ingestTransaction } from "@/lib/repo/transactions";
 import { dedupeHashExists, findSimilarExpenses, linkMessageTx, savePending, takePending, type PendingStep } from "@/lib/repo/whatsapp";
 import { localDate } from "@/lib/time";
@@ -50,6 +52,8 @@ type Draft = {
   occurredAt: string;
   /** El mensaje traía una fecha explícita distinta de hoy: la hora (12:00) es artificial y la fila lleva la etiqueta `…-d`. */
   dated?: boolean;
+  /** Compra a meses sin intereses: número de mensualidades (el monto del borrador es el TOTAL). */
+  installments?: number | null;
   confirmed?: boolean;
   dupOk?: boolean;
 };
@@ -82,7 +86,10 @@ function revive(step: PendingStep, payload: string): Pending | null {
   }
 }
 
-const summaryOf = (d: Draft): R.Summary => ({ merchant: d.merchant, cents: d.amountCents });
+const summaryOf = (d: Draft): R.Summary => ({ merchant: d.merchant, cents: d.amountCents, msi: d.installments ?? null });
+
+/** Tarjetas de débito no tienen MSI. No hay un campo "tipo" en la tarjeta: se deduce del diseño o del nombre. */
+const isDebit = (card: Card) => card.art === "banamex-debito" || /d[eé]bito/i.test(card.name);
 const cardById = (c: Ctx, id: number | null) => c.cards.find((x) => x.id === id) ?? null;
 
 function questionFor(c: Ctx, p: Pending): string {
@@ -131,6 +138,7 @@ async function advance(c: Ctx, draft: Draft, choices: number[], hint?: string | 
   }
   const card = cardById(c, d.cardId)!;
   const at = new Date(d.occurredAt);
+  if (d.installments && isDebit(card)) return { reply: R.msiNotForDebit(card.name), status: "done" };
   if (d.amountCents >= CONFIRM_CENTS && !d.confirmed) return ask(c, { need: "confirm", draft: d, choices: [], tries: 0 });
 
   if (!d.dupOk) {
@@ -200,7 +208,34 @@ async function save(c: Ctx, d: Draft, card: Card, seq?: number): Promise<Outcome
       /* el nombre de la categoría es decoración: el gasto ya está guardado */
     }
   }
-  return { reply: R.registered({ cents: d.amountCents!, merchant: d.merchant!, card: card.name, when: whenLabel(at, c.sentAt), category }), status: "done", txId: r.id };
+  let msi: R.MsiInfo | null = null;
+  if (d.installments) msi = await createMsiPlan(d, card, at, r.id, r.categoryId);
+  const reply = R.registered({ cents: d.amountCents!, merchant: d.merchant!, card: card.name, when: whenLabel(at, c.sentAt), category, msi });
+  return { reply, status: "done", txId: r.id };
+}
+
+/**
+ * Crea el plan de la compra a MSI y lo liga al gasto (que ya está guardado a precio completo, como todas las compras de la app).
+ * Si el plan falla, el gasto se queda y se avisa para que se agregue desde la app: nunca se pierde el registro.
+ */
+async function createMsiPlan(d: Draft, card: Card, at: Date, txId: number, categoryId: number | null): Promise<R.MsiInfo> {
+  const n = d.installments!;
+  const total = d.amountCents!;
+  const monthly = Math.round(total / n);
+  const purchase = localDate(at);
+  try {
+    const anchor = await cardCutAnchor(card.id);
+    const timing = newPlanTiming(purchase, anchor);
+    const plan = await upsertPlan({
+      cardId: card.id, categoryId, merchant: d.merchant!, kind: "purchase", withInterest: false, ratePct: 0,
+      originalCents: total, monthlyCents: monthly, pendingCents: total - monthly, nTotal: n, nCurrent: 1, asOf: timing.asOf, startedOn: purchase, source: "manual",
+    });
+    await linkTransactionPlan(txId, plan.id);
+    return { n, monthlyCents: monthly, ok: true, guessed: timing.guessed };
+  } catch (e) {
+    console.error("[chat] no se pudo crear el plan MSI:", ((e as Error)?.message ?? "").slice(0, 120));
+    return { n, monthlyCents: monthly, ok: false, guessed: false };
+  }
 }
 
 /** Respuesta inválida: la primera vez se repite la pregunta; la segunda se cancela. */
@@ -319,6 +354,7 @@ export async function handleText(c: Ctx, rawText: string): Promise<Outcome> {
       cardId: parsed.cardIds.length === 1 ? parsed.cardIds[0] : null,
       occurredAt: (parsed.date.kind === "today" ? c.sentAt : cdmxAt(parsed.date.ymd)).toISOString(),
       dated: parsed.date.kind === "date",
+      installments: parsed.installments,
     };
     return advance(c, draft, parsed.cardIds.length > 1 ? parsed.cardIds : [], parsed.unmatchedHint);
   }

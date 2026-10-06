@@ -1,24 +1,32 @@
 import path from "node:path";
 import { createWorker, PSM, type Worker } from "tesseract.js";
 import { renderPageAsImage } from "unpdf";
+import { readImage, visionConfig, VisionError, type VisionConfig } from "./ocr-azure";
 import { openPdf, PDF_MAX_PAGES } from "./text";
 
 /**
- * OCR LOCAL para PDFs de solo imagen (p. ej. el comprobante de transferencia de la app de Banamex: el texto va como bitmaps).
- * Nada sale del servidor: tesseract (WASM) + el idioma español empaquetado en node_modules. Se eligió esto sobre un modelo
- * de visión externo para que ningún documento financiero salga a un tercero y para que el resultado sea reproducible.
+ * OCR para PDFs de solo imagen (p. ej. el comprobante de transferencia de la app de Banamex: el texto va como bitmaps). Nunca un modelo
+ * de lenguaje: devuelven el texto impreso, sin interpretar cifras.
+ *  - Con `AZURE_VISION_ENDPOINT` (producción): Azure AI Vision (ver ocr-azure.ts), ~1 s por página y gratis a este volumen.
+ *  - Sin él, o si Azure falla: OCR LOCAL con tesseract (WASM) y el idioma español empaquetado en node_modules. Nada sale del servidor,
+ *    pero en el plan B1 tarda ~100 s por comprobante: es el respaldo, no el camino normal.
  *
  * Cada página se lee DOS veces con distinta resolución: quien consume compara los campos críticos (monto, rastreo, fecha…)
  * y, si no coinciden, pide revisión humana en vez de registrar un dato dudoso.
  */
 export const OCR_MAX_PAGES = 3;
 export const OCR_SCALES = [2.5, 3.5] as const;
+/** Resoluciones para Azure (imágenes más chicas: la lectura ya es muy exacta y el tamaño por llamada es menor). */
+export const VISION_SCALES = [2, 3] as const;
 /** Tope de píxeles por página renderizada (una página gigante a 3.5× serían GB de memoria nativa). Una carta a 3.5× ≈ 6 MP. */
 export const OCR_MAX_PIXELS = 25_000_000;
-const OCR_TIMEOUT_MS = 90_000;
-const START_TIMEOUT_MS = 30_000;
+// Tiempos medidos en el plan B1 (un núcleo compartido): el motor tarda ~45 s en arrancar en frío y cada lectura de página 10–20 s (en una laptop,
+// menos de 1 s). Un comprobante de 2 páginas leído a 2 resoluciones son 4 lecturas: ~100 s en frío, ~55 s con el motor ya caliente.
+const OCR_TIMEOUT_MS = 240_000;
+const START_TIMEOUT_MS = 120_000;
 const STOP_TIMEOUT_MS = 5_000;
-const IDLE_MS = 60_000;
+/** El motor local se apaga tras este rato sin uso (memoria) y el siguiente documento paga el arranque. */
+const IDLE_MS = 15 * 60_000;
 
 export class OcrError extends Error {}
 
@@ -82,12 +90,22 @@ export type OcrPass = { scale: number; pages: { page: number; text: string; conf
 export type OcrResult = { passes: OcrPass[]; numPages: number };
 
 type Control = { aborted: boolean };
+/** Un motor lee la imagen de una página (PNG) y devuelve su texto y confianza (0–100). */
+type Engine = (png: Buffer) => Promise<{ text: string; confidence: number }>;
 
-async function run(bytes: Uint8Array, scales: readonly number[], password: string | undefined, ctl: Control): Promise<OcrResult> {
+const localEngine = async (): Promise<Engine> => {
+  const worker = await getWorker();
+  return async (png) => {
+    const { data } = await worker.recognize(png);
+    return { text: data.text, confidence: data.confidence };
+  };
+};
+
+async function run(bytes: Uint8Array, scales: readonly number[], password: string | undefined, ctl: Control, engine: () => Promise<Engine>): Promise<OcrResult> {
   const pdf = await openPdf(bytes, password);
   try {
     const numPages = Math.min(pdf.numPages, OCR_MAX_PAGES, PDF_MAX_PAGES);
-    const worker = await getWorker();
+    const read = await engine();
     const passes: OcrPass[] = [];
     for (const scale of scales) {
       const pages: OcrPass["pages"] = [];
@@ -97,8 +115,8 @@ async function run(bytes: Uint8Array, scales: readonly number[], password: strin
         const vp = (await pdf.getPage(p)).getViewport({ scale: 1 });
         if (vp.width * vp.height * scale * scale > OCR_MAX_PIXELS) throw new OcrError("Una página del PDF es demasiado grande para leerla");
         const png = await renderPageAsImage(pdf, p, { canvasImport: () => import("@napi-rs/canvas"), scale });
-        const { data } = await worker.recognize(Buffer.from(png));
-        pages.push({ page: p, text: data.text, confidence: data.confidence });
+        const { text, confidence } = await read(Buffer.from(png));
+        pages.push({ page: p, text, confidence });
       }
       passes.push({ scale, pages });
     }
@@ -106,6 +124,28 @@ async function run(bytes: Uint8Array, scales: readonly number[], password: strin
   } finally {
     await (pdf as { destroy?: () => Promise<void> }).destroy?.();
   }
+}
+
+const visionEngine = (cfg: VisionConfig) => async (): Promise<Engine> => (png) => readImage(png, cfg);
+
+/** Azure primero (si está configurado) y, si falla, el OCR local. Los errores del PDF mismo (contraseña, dañado) no se reintentan. */
+async function runBest(bytes: Uint8Array, scales: readonly number[], password: string | undefined, ctl: Control): Promise<OcrResult> {
+  const cfg = visionConfig();
+  if (cfg) {
+    try {
+      const t0 = Date.now();
+      const r = await run(bytes, VISION_SCALES, password, ctl, visionEngine(cfg));
+      console.log(`[ocr] Azure Vision: ${r.numPages} pág. × ${VISION_SCALES.length} lecturas en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      return r;
+    } catch (e) {
+      if (!(e instanceof VisionError)) throw e;
+      console.warn(`[ocr] Azure Vision falló (${e.message.slice(0, 120)}): se usa el OCR local`);
+    }
+  }
+  const t0 = Date.now();
+  const r = await run(bytes, scales, password, ctl, localEngine);
+  console.log(`[ocr] local: ${r.numPages} pág. × ${scales.length} lecturas en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  return r;
 }
 
 /** Lee el PDF con OCR. Un solo documento a la vez (la memoria del plan B1 es limitada) y con tope de tiempo. */
@@ -118,7 +158,7 @@ export function ocrPdf(bytes: Uint8Array, scales: readonly number[] = OCR_SCALES
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([
-        run(bytes, scales, password, ctl),
+        runBest(bytes, scales, password, ctl),
         new Promise<never>((_, rej) => {
           timer = setTimeout(() => {
             ctl.aborted = true;
