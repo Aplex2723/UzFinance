@@ -22,6 +22,13 @@ export type ChatOptions = {
 /** Quita bloques de razonamiento (<think>…</think>) que algunos modelos mezclan con la respuesta. */
 export const stripReasoning = (s: string) => s.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
+/** El contenido puede ser texto o una lista de bloques ({type:"text", text}). */
+export function contentText(c: unknown): string {
+  if (typeof c === "string") return c;
+  if (Array.isArray(c)) return c.map((b) => (typeof b === "string" ? b : typeof (b as { text?: unknown })?.text === "string" ? (b as { text: string }).text : "")).join("");
+  return "";
+}
+
 export async function chat(o: ChatOptions): Promise<string> {
   let res: Response;
   try {
@@ -31,7 +38,9 @@ export async function chat(o: ChatOptions): Promise<string> {
       body: JSON.stringify({
         model: o.model,
         temperature: 0.2,
-        max_tokens: o.maxTokens ?? 900,
+        // Sin "razonamiento": Haiku 5.5 piensa por defecto y esos tokens se comen el tope, dejando la respuesta vacía o cortada.
+        max_tokens: o.maxTokens ?? 1500,
+        reasoning: { effort: "none" },
         provider: { data_collection: "deny" },
         messages: [{ role: "system", content: o.system }, { role: "user", content: o.user }],
       }),
@@ -41,9 +50,11 @@ export async function chat(o: ChatOptions): Promise<string> {
     throw new LlmError((e as Error)?.name === "TimeoutError" ? "El modelo tardó demasiado" : "Sin conexión con el modelo");
   }
   if (!res.ok) throw new LlmError(res.status === 401 || res.status === 403 ? "La API key del modelo fue rechazada" : res.status === 402 ? "Sin saldo en OpenRouter" : res.status === 429 ? "El modelo está saturado, intenta en un momento" : `El modelo respondió ${res.status}`);
-  const json = (await res.json().catch(() => null)) as { choices?: { message?: { content?: unknown } }[] } | null;
-  const text = json?.choices?.[0]?.message?.content;
-  const clean = typeof text === "string" ? stripReasoning(text) : "";
+  const json = (await res.json().catch(() => null)) as { choices?: { finish_reason?: string; message?: { content?: unknown } }[] } | null;
+  const choice = json?.choices?.[0];
+  const clean = stripReasoning(contentText(choice?.message?.content));
   if (!clean) throw new LlmError("El modelo devolvió una respuesta vacía");
+  // Un texto cortado por el tope de tokens nunca se muestra como si estuviera completo.
+  if (choice?.finish_reason === "length") throw new LlmError("El modelo cortó la respuesta; intenta de nuevo");
   return clean;
 }

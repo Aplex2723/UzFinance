@@ -2,6 +2,7 @@ import sql from "mssql";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as listRoute, POST as postRoute } from "@/app/api/goals/route";
 import { DELETE as delRoute, GET as getRoute, PUT as putRoute } from "@/app/api/goals/[id]/route";
+import { POST as monthRecapRoute } from "@/app/api/insights/recap/route";
 import { POST as recapRoute } from "@/app/api/goals/recap/route";
 import { closePool, query } from "@/lib/db/pool";
 import { resetEnvCache } from "@/lib/env";
@@ -12,6 +13,7 @@ import { createCategory } from "@/lib/repo/categories";
 import { createGoal, deleteGoal, getGoalById, listGoals, type GoalInput } from "@/lib/repo/goals";
 import { getGoalsOverview } from "@/lib/repo/goals-plan";
 import { generateRecap, getRecap } from "@/lib/repo/goals-recap";
+import { getMonthRecap } from "@/lib/repo/month-recap";
 import { setMonthlyIncome } from "@/lib/repo/settings";
 import { getChangeRevision } from "@/lib/repo/transactions";
 import { localDate } from "@/lib/time";
@@ -259,5 +261,49 @@ describe("resumen con IA", () => {
     const bad = await call();
     expect(bad.status).toBe(502);
     expect((await body(bad)).error).toContain("saldo");
+  });
+});
+
+describe("análisis del mes con IA", () => {
+  const call = (b: unknown = { month: "2026-10" }, headers: Record<string, string> = authed()) => monthRecapRoute(req("/api/insights/recap", { method: "POST", body: b, headers }), ctx());
+  const reply = (text: string) => vi.fn<(u: string, i: RequestInit) => Promise<Response>>(async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: text } }] }));
+
+  it("exige sesión y mismo origen, valida el mes y la configuración", async () => {
+    expect((await call({ month: "2026-10" }, {})).status).toBe(401);
+    expect((await call({ month: "2026-10" }, { ...authed(), origin: "https://evil.example" })).status).toBe(403);
+    expect((await call({ month: "octubre" })).status).toBe(400);
+    expect((await call({ month: "2026-10", extra: 1 })).status).toBe(400);
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    resetEnvCache();
+    expect((await call()).status).toBe(503);
+  });
+
+  it("rechaza meses futuros y meses sin gastos; con gastos genera y guarda el análisis de ese mes", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test-key-1234567890");
+    resetEnvCache();
+    expect((await call({ month: "2099-01" })).status).toBe(400);
+    expect((await call({ month: "2026-03" })).status).toBe(400); // sin gastos
+    await setMonthlyIncome(100_000_00);
+    await spend("2026-03-10", 40_000_00);
+    const f = reply("**Resumen**\nGastaste $40,000 en marzo.");
+    vi.stubGlobal("fetch", f);
+    const res = await call({ month: "2026-03" });
+    expect(res.status).toBe(200);
+    expect((await body(res)).recap?.text).toContain("$40,000");
+    expect(await getMonthRecap("2026-03")).toMatchObject({ text: expect.stringContaining("$40,000") });
+    expect(await getMonthRecap("2026-04")).toBeNull();
+    const sent = JSON.parse(String((f.mock.calls[0][1] as RequestInit).body));
+    expect(sent.messages[1].content).toContain("Marzo 2026");
+    expect(sent.messages[1].content).not.toMatch(/"merchant/i);
+  });
+
+  it("un fallo del modelo sale como 502 con un mensaje seguro", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test-key-1234567890");
+    resetEnvCache();
+    await spend("2026-03-10", 40_000_00);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 429 })));
+    const res = await call({ month: "2026-03" });
+    expect(res.status).toBe(502);
+    expect((await body(res)).error).not.toContain("sk-or");
   });
 });

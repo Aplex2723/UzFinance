@@ -73,15 +73,7 @@ Formato exacto (Markdown simple):
 
 export const recapUserMessage = (f: RecapFacts) => `<datos>\n${JSON.stringify(f)}\n</datos>`;
 
-const MONEY_RE = /-?\$\s?\d[\d,]*(?:\.\d+)?/g;
-const norm = (m: string) => m.replace(/[\s,]/g, "").replace(/^-/, "").replace(/\.0+$/, "");
-
-/** Montos ("$25,000") que aparecen en el texto y NO existen en las cifras enviadas: señal de que el modelo inventó o calculó. */
-export function unknownAmounts(text: string, f: RecapFacts): string[] {
-  const allowed = new Set([...JSON.stringify(f).matchAll(MONEY_RE)].map((m) => norm(m[0])));
-  allowed.add("$0");
-  return [...new Set((text.match(MONEY_RE) ?? []).filter((m) => !allowed.has(norm(m))))];
-}
+export { unknownAmounts } from "./llm/verified";
 
 /** Huella de lo que alimenta el resumen: si cambia (metas, ingreso, gasto, estados) el resumen guardado queda "desactualizado". */
 export function recapHash(s: PlanSummary, cap: Capacity): string {

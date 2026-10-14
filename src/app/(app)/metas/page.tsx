@@ -64,6 +64,10 @@ export default async function Page() {
             stale={!!recap && recap.hash !== recapHash(s, cap)}
             configured={configured}
             blockedReason={blocked}
+            title="Resumen con IA"
+            endpoint="/api/goals/recap"
+            idleText="Genera un resumen de cómo van tus metas y qué hacer para alcanzarlas, con base en tus ingresos y gastos."
+            testId="recap"
           />
 
           <Panel title="Análisis automático">

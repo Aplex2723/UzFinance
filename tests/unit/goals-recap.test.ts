@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { capacityFrom, planGoals, scenarios, type GoalRow } from "@/lib/goals";
 import { buildRecapFacts, cleanLabel, recapHash, recapUserMessage, RECAP_SYSTEM, unknownAmounts } from "@/lib/goals-recap";
 import { getEnv, resetEnvCache } from "@/lib/env";
-import { chat, CHAT_URL, LlmError, stripReasoning } from "@/lib/llm/openrouter";
+import { chat, CHAT_URL, contentText, LlmError, stripReasoning } from "@/lib/llm/openrouter";
 
 const TODAY = "2026-10-13";
 const goal = (id: number, o: Partial<GoalRow> = {}): GoalRow => ({ id, name: `Meta ${id}`, kind: "auto", priority: 2, monthOnly: false, targetCents: 1_500_000_00, targetDate: "2027-04-11", savedCents: 100_000_00, savedAsOf: TODAY, ...o });
@@ -67,7 +67,7 @@ describe("cliente de OpenRouter", () => {
     expect(url).toBe(CHAT_URL);
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer sk-or-test-key-1234567890");
     const body = JSON.parse(String(init.body));
-    expect(body).toMatchObject({ model: "anthropic/claude-haiku-5.5", provider: { data_collection: "deny" }, temperature: 0.2 });
+    expect(body).toMatchObject({ model: "anthropic/claude-haiku-5.5", provider: { data_collection: "deny" }, temperature: 0.2, reasoning: { effort: "none" }, max_tokens: 1500 });
     expect(body.messages).toEqual([{ role: "system", content: "S" }, { role: "user", content: "U" }]);
   });
   it.each([
@@ -86,6 +86,17 @@ describe("cliente de OpenRouter", () => {
     const e = await chat({ ...base, fetchImpl: down as unknown as typeof fetch }).catch((x) => x);
     expect(e).toBeInstanceOf(LlmError);
     expect(e.message).not.toContain("sk-or");
+  });
+  it("una respuesta cortada por el tope de tokens se rechaza, no se muestra", async () => {
+    const f = vi.fn(async () => Response.json({ choices: [{ finish_reason: "length", message: { content: "**Resumen**\nTe sobran $40" } }] }));
+    await expect(chat({ ...base, fetchImpl: f as unknown as typeof fetch })).rejects.toThrow("cortó");
+    const empty = vi.fn(async () => Response.json({ choices: [{ finish_reason: "length", message: { content: [] } }] }));
+    await expect(chat({ ...base, fetchImpl: empty as unknown as typeof fetch })).rejects.toThrow("vacía");
+  });
+  it("acepta el contenido como lista de bloques de texto", async () => {
+    const f = vi.fn(async () => Response.json({ choices: [{ finish_reason: "stop", message: { content: [{ type: "text", text: "Hola " }, { type: "text", text: "mundo" }] } }] }));
+    expect(await chat({ ...base, fetchImpl: f as unknown as typeof fetch })).toBe("Hola mundo");
+    expect(contentText(undefined)).toBe("");
   });
   it("stripReasoning quita bloques de razonamiento", () => {
     expect(stripReasoning("<think>a\nb</think>\nTexto")).toBe("Texto");

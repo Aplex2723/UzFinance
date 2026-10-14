@@ -31,6 +31,7 @@ export type Insights = {
   avgTicket: number;
   count: number;
   topDay: { date: string; cents: number } | null;
+  topWeekday: { name: string; cents: number } | null;
   history: HistoryRow[];
   categoryDeltas: { name: string; color: string; cents: number; prevCents: number }[];
   topMerchants: { merchant: string; cents: number; count: number }[];
@@ -131,6 +132,6 @@ export async function getInsights(month: string, now = new Date()): Promise<Insi
     dailyAllowance: isCurrent && income > 0 && remainingDays > 0 ? Math.max(0, Math.round((income - spent) / remainingDays)) : null,
     noSpendDays,
     avgTicket: count > 0 ? Math.round(purchasesTotal / count) : 0,
-    count, topDay, history, categoryDeltas, topMerchants: merchants.map((r) => ({ merchant: r.merchant, cents: N(r.cents), count: N(r.n) })), messages,
+    count, topDay, topWeekday, history, categoryDeltas, topMerchants: merchants.map((r) => ({ merchant: r.merchant, cents: N(r.cents), count: N(r.n) })), messages,
   };
 }

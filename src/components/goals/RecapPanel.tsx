@@ -9,15 +9,29 @@ import { MiniMarkdown } from "./MiniMarkdown";
 
 export type RecapView = { text: string; at: string; model: string };
 
-/** Resumen con IA de las metas: se genera a pedido (cuesta una llamada al modelo) y se guarda hasta que lo actualices. */
-export function RecapPanel({ recap, stale, configured, blockedReason }: { recap: RecapView | null; stale: boolean; configured: boolean; blockedReason: string | null }) {
+export type RecapPanelProps = {
+  recap: RecapView | null;
+  stale: boolean;
+  configured: boolean;
+  blockedReason: string | null;
+  title: string;
+  /** Ruta que genera el texto (POST) y lo que se le manda. */
+  endpoint: string;
+  payload?: unknown;
+  /** Texto cuando aún no hay resumen. */
+  idleText: string;
+  testId?: string;
+};
+
+/** Resumen con IA: se genera a pedido (cuesta una llamada al modelo) y se guarda hasta que lo actualices. */
+export function RecapPanel({ recap, stale, configured, blockedReason, title, endpoint, payload = {}, idleText, testId = "recap" }: RecapPanelProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function generate() {
     setBusy(true); setError(null);
-    const r = await apiFetch("/api/goals/recap", "POST", {});
+    const r = await apiFetch(endpoint, "POST", payload);
     setBusy(false);
     if (!r.ok) return setError(r.error);
     router.refresh();
@@ -26,11 +40,11 @@ export function RecapPanel({ recap, stale, configured, blockedReason }: { recap:
   const disabled = busy || !configured || !!blockedReason;
   return (
     <Panel
-      title={<span className="inline-flex items-center gap-1.5"><Sparkles size={13} aria-hidden /> Resumen con IA</span>}
-      action={<button type="button" className="btn btn-primary !h-8" onClick={generate} disabled={disabled} data-testid="recap-generate">{busy ? "Analizando…" : recap ? "Actualizar resumen" : "Generar resumen"}</button>}
+      title={<span className="inline-flex items-center gap-1.5"><Sparkles size={13} aria-hidden /> {title}</span>}
+      action={<button type="button" className="btn btn-primary !h-8" onClick={generate} disabled={disabled} data-testid={`${testId}-generate`}>{busy ? "Analizando…" : recap ? "Actualizar resumen" : "Generar resumen"}</button>}
     >
       {recap ? (
-        <div data-testid="recap-text">
+        <div data-testid={`${testId}-text`}>
           <MiniMarkdown text={recap.text} />
           <p className="mt-3 text-[11px] text-faint">
             Generado {formatDay(recap.at)} {formatTime(recap.at)} con {recap.model} a partir de cifras agregadas (sin comercios). Verifica los montos en cada meta.
@@ -39,7 +53,7 @@ export function RecapPanel({ recap, stale, configured, blockedReason }: { recap:
         </div>
       ) : (
         <p className="text-muted">
-          {!configured ? "El resumen con IA no está configurado (falta la API key del modelo)." : blockedReason ?? "Genera un resumen de cómo van tus metas y qué hacer para alcanzarlas, con base en tus ingresos y gastos."}
+          {!configured ? "La IA no está configurada (falta la API key del modelo)." : blockedReason ?? idleText}
         </p>
       )}
       {recap && blockedReason && <p className="mt-2 text-[11px] text-muted">{blockedReason}</p>}

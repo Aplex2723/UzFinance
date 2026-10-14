@@ -8,6 +8,10 @@ import { DashboardActions } from "@/components/DashboardActions";
 import { InsightList } from "@/components/insights/InsightList";
 import { KpiTile } from "@/components/insights/Kpi";
 import { GoalsOverviewPanel } from "@/components/goals/GoalsOverviewPanel";
+import { RecapPanel } from "@/components/goals/RecapPanel";
+import { monthRecapHash } from "@/lib/month-recap";
+import { getEnv } from "@/lib/env";
+import { getMonthRecap } from "@/lib/repo/month-recap";
 import { MsiPanel } from "@/components/insights/MsiPanel";
 import { PendingMerchants } from "@/components/PendingMerchants";
 import { PaceBar } from "@/components/insights/PaceBar";
@@ -35,7 +39,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const raw = typeof sp.month === "string" ? sp.month : undefined;
   const month = raw && MONTH_RE.test(raw) ? raw : currentMonth();
 
-  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins, msi, pendingMerchants, categories, goals] = await Promise.all([
+  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins, msi, pendingMerchants, categories, goals, monthRecap] = await Promise.all([
     getOverview(month),
     getCardSummaries(month),
     getCumulative(month),
@@ -51,6 +55,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     listUncategorizedMerchants(8),
     listCategories(),
     getGoalsOverview(),
+    getMonthRecap(month),
   ]);
   const paymentsTotal = payments.rows.reduce((a, r) => a + r.amount_cents, 0);
 
@@ -115,6 +120,18 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <Panel title="Insights del mes" action={<Link href={`/analitica${month === currentMonth() ? "" : `?month=${month}`}`} className="btn !h-7 !px-2.5 text-[11px]">Ver análisis</Link>}>
         <InsightList messages={ins.messages.slice(0, 4)} />
       </Panel>
+
+      <RecapPanel
+        title={`Análisis de ${monthLabel(month)} con IA`}
+        endpoint="/api/insights/recap"
+        payload={{ month }}
+        recap={monthRecap ? { text: monthRecap.text, at: monthRecap.at, model: monthRecap.model } : null}
+        stale={!!monthRecap && monthRecap.hash !== monthRecapHash(ins)}
+        configured={!!getEnv().OPENROUTER_API_KEY}
+        blockedReason={ins.count === 0 ? "Aún no hay gastos en este mes para analizar." : null}
+        idleText="Un análisis en palabras de cómo va el mes: ritmo, categorías que más pesan, comparación con el mes anterior y qué conviene hacer."
+        testId="month-recap"
+      />
 
       <MsiPanel s={msi} />
 

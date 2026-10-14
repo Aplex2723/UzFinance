@@ -158,6 +158,7 @@ test.describe("metas de ahorro", () => {
     await page.waitForLoadState("networkidle");
     const top = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
     expect(await top('[data-testid="goal-panel"]')).toBeLessThan(await top('section[aria-label="Tarjetas"]'));
+    await expect(page.getByTestId("month-recap-generate")).toBeVisible(); // análisis del mes con IA
     if (info.project.name === "mobile") {
       for (const path of ["/", "/metas"]) {
         await page.goto(path);
