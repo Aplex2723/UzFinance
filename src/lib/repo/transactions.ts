@@ -420,7 +420,7 @@ export async function getChangeRevision(): Promise<string> {
             (SELECT COUNT_BIG(*) FROM dbo.unparsed_emails) AS u,
             (SELECT COUNT_BIG(*) FROM dbo.cards WHERE needs_name = 1) AS c,
             -- alerts_last_run cambia cada ~15 min sin que cambie nada visible: no cuenta.
-            (SELECT CAST(ISNULL(CHECKSUM_AGG(CHECKSUM(value)), 0) AS bigint) + CAST(ISNULL((SELECT CHECKSUM_AGG(CHECKSUM(saved_cents, target_cents, target_date, name)) FROM dbo.savings_goals), 0) AS bigint) FROM dbo.app_settings WHERE [key] <> 'alerts_last_run') AS i,
+            (SELECT CAST(ISNULL(CHECKSUM_AGG(CHECKSUM(value)), 0) AS bigint) + CAST(ISNULL((SELECT CHECKSUM_AGG(CHECKSUM(id, saved_cents, target_cents, target_date, name, kind, priority, month_only)) FROM dbo.savings_goals), 0) AS bigint) FROM dbo.app_settings WHERE [key] <> 'alerts_last_run') AS i,
             -- alertas sin leer/descartar (y la última, por si una se lee mientras otra llega)
             (SELECT CONCAT(COUNT_BIG(*), ':', ISNULL(MAX(id), 0)) FROM dbo.alerts WHERE read_at IS NULL AND dismissed_at IS NULL) AS a,
             (SELECT CONCAT(COUNT_BIG(*), ':', ISNULL(DATEDIFF_BIG(second, '20000101', MAX(updated_at)), 0)) FROM dbo.documents) AS d,

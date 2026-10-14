@@ -293,6 +293,8 @@ export function unconfirmedCandidate(rows: UnconfirmedRow[], cfg: AlertConfig): 
 // ── 7. Meta de ahorro ───────────────────────────────────────────────────────────
 
 export type GoalAlertInput = {
+  /** Id de la meta: con varias metas cada una tiene su propio aviso semanal. */
+  id?: number;
   name: string;
   remaining: number;
   perMonth: number;
@@ -308,7 +310,7 @@ export type GoalAlertInput = {
 export function goalCandidate(i: GoalAlertInput, cfg: AlertConfig): AlertCandidate | null {
   if (![i.remaining, i.perMonth, i.daysLeft].every(fin) || i.done || i.remaining <= 0) return null;
   const name = safeText(i.name, 50) || "tu meta";
-  const key = `goal:${isoWeekKey(i.today)}`;
+  const key = `goal:${i.id !== undefined ? `${i.id}:` : ""}${isoWeekKey(i.today)}`;
   if (i.overdue) {
     return {
       rule: "goal_off_track", severity: "warn",

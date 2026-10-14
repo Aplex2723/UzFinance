@@ -7,7 +7,7 @@ import { CardWallet } from "@/components/CardWallet";
 import { DashboardActions } from "@/components/DashboardActions";
 import { InsightList } from "@/components/insights/InsightList";
 import { KpiTile } from "@/components/insights/Kpi";
-import { GoalPanel } from "@/components/insights/GoalPanel";
+import { GoalsOverviewPanel } from "@/components/goals/GoalsOverviewPanel";
 import { MsiPanel } from "@/components/insights/MsiPanel";
 import { PendingMerchants } from "@/components/PendingMerchants";
 import { PaceBar } from "@/components/insights/PaceBar";
@@ -25,9 +25,9 @@ import { ISSUER_LABEL, monthLabel } from "@/lib/format";
 import { formatMXN } from "@/lib/money";
 import { getCardSummaries, getCumulative, getHeatmap, getOverview, getSankey, getWeekdayTotals } from "@/lib/repo/stats";
 import { listCategories } from "@/lib/repo/categories";
-import { getGoal } from "@/lib/repo/goals";
+import { getGoalsOverview } from "@/lib/repo/goals-plan";
 import { listTransactions, listUncategorizedMerchants } from "@/lib/repo/transactions";
-import { currentMonth, localDate, MONTH_RE, prevMonth } from "@/lib/time";
+import { currentMonth, MONTH_RE, prevMonth } from "@/lib/time";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   await requirePageUser();
@@ -35,7 +35,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const raw = typeof sp.month === "string" ? sp.month : undefined;
   const month = raw && MONTH_RE.test(raw) ? raw : currentMonth();
 
-  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins, msi, pendingMerchants, categories, goal] = await Promise.all([
+  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins, msi, pendingMerchants, categories, goals] = await Promise.all([
     getOverview(month),
     getCardSummaries(month),
     getCumulative(month),
@@ -50,7 +50,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     getMsi(),
     listUncategorizedMerchants(8),
     listCategories(),
-    getGoal(),
+    getGoalsOverview(),
   ]);
   const paymentsTotal = payments.rows.reduce((a, r) => a + r.amount_cents, 0);
 
@@ -108,7 +108,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         />
       </section>
 
-      <GoalPanel goal={goal} income={ins.income} today={localDate(new Date())} projectedSaving={ins.isCurrent && ins.income > 0 ? ins.income - ins.projected : null} />
+      <GoalsOverviewPanel o={goals} />
 
       <CardWallet cards={cards.map((c) => ({ id: c.id, name: c.name, issuer: c.issuer, last4: c.last4, color: c.color, art: allCards.find((x) => x.id === c.id)?.art ?? null, cents: c.cents, prevCents: c.prevCents, deltaPct: c.deltaPct, spark: c.spark }))} />
 

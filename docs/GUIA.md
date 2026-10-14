@@ -504,7 +504,14 @@ Ver logs: `az webapp log tail --name uzfinance-092d5 --resource-group rg-uzfinan
 correr el script, aceptar reutilizar el token y escribir la lista nueva (el secreto se conserva, así que el webhook registrado sigue valiendo).
 **Rotar el secreto del webhook:** `scripts/telegram-setup.sh --rotate-secret` y registrar el webhook. **Apagar el bot:** `scripts/telegram-setup.sh --delete-webhook`.
 
-## 12. Trampas conocidas
+## 12. Metas de ahorro y predicción
+
+- **Dónde**: panel "Metas de ahorro" en el inicio (crear, editar, eliminar) y página `/metas` (análisis completo). Hasta 20 metas; cada una con nombre, tipo, prioridad (alta/normal/baja), monto, ahorrado hoy y fecha (exacta o solo mes → último día del mes). Tabla `savings_goals` (migración 011 agregó `kind`, `priority`, `month_only`, `created_at`).
+- **Predicción** (`src/lib/goals.ts`, pura): excedente mensual = ingreso mensual − gasto típico (promedio de los últimos 3 meses cerrados; el primer mes con datos se descarta si empezó después del día 7; sin meses cerrados usa la proyección del mes en curso). El excedente se reparte en **cascada** por prioridad y luego fecha: una meta llega a tiempo si lo acumulado hasta ella cabe antes de su fecha. Estados: lograda, a tiempo, a tiempo pero justa (un mes de gasto alto la atrasa), se retrasa, no alcanza (>10 años), vencida. Calcula cuánto falta liberar al mes, escenarios de recorte (0/10/20 %) y una idea de recorte por categoría (excluye gastos fijos).
+- **Alertas**: `goal_off_track` evalúa cada meta, repartiendo el ahorro proyectado del mes entre ellas por prioridad (aviso semanal por meta: `goal:<id>:<semana>`).
+- **Resumen con IA** (`/metas`, botón "Generar resumen"): OpenRouter chat (`OPENROUTER_API_KEY`, la misma del categorizador; modelo `GOALS_LLM_MODEL`, por omisión `anthropic/claude-haiku-5.5`, ≈ US$0.001 por resumen). Solo se envían cifras agregadas ya calculadas (ingreso, gasto típico, metas, categorías con promedio): nunca comercios, tarjetas ni descripciones. Se pide `data_collection: deny` a OpenRouter, se verifica que cada monto del texto exista en las cifras enviadas (si no, un reintento y luego se descarta) y se guarda en `app_settings.goals_recap`. Máx. 8 por hora. Es a pedido: nunca se llama al modelo solo por abrir la página.
+
+## 13. Trampas conocidas
 
 - `sed -i` en macOS necesita `sed -i ''`. Los scripts temporales van al scratchpad, no a `/tmp`.
 - Cada migración SQL corre en un solo lote: DDL sobre columnas nuevas dentro de `EXEC('…')`.

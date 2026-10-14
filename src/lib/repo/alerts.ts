@@ -9,9 +9,9 @@ import { clampBody, clampTitle, shortHash, whatsappText } from "@/lib/alerts/tex
 import { isSeverity, MAX_NEW_ALERTS_PER_RUN, SEVERITY_RANK, type AlertCandidate, type AlertRow, type AlertRule } from "@/lib/alerts/types";
 import { SQL as CHAT_SQL } from "@/lib/chat-sources";
 import { isUniqueViolation, query, t } from "@/lib/db/pool";
-import { goalProgress } from "@/lib/goals";
+import { fundingOrder, goalProgress } from "@/lib/goals";
 import { currentMonth, localDate } from "@/lib/time";
-import { getGoal } from "./goals";
+import { listGoals } from "./goals";
 import { getInsights } from "./insights";
 
 export { whatsappText };
@@ -326,11 +326,15 @@ export async function evaluatePeriodicAlerts(now: Date = new Date()): Promise<nu
   if (cfg.enabled.goal_off_track && ins) {
     await step("goal", async () => {
       const i = ins!;
-      const goal = await getGoal();
-      if (!goal) return;
-      const p = goalProgress(goal, today, i.income);
-      const projectedSaving = i.isCurrent && i.income > 0 && i.elapsedDays >= PACE_PROJECTION_MIN_DAY ? i.income - i.projected : null;
-      await emit(cfg, budget, goalCandidate({ name: goal.name, remaining: p.remaining, perMonth: p.perMonth, done: p.done, overdue: p.overdue, daysLeft: p.daysLeft, projectedSaving, today }, cfg));
+      const goals = (await listGoals()).sort(fundingOrder);
+      if (!goals.length) return;
+      // El ahorro proyectado del mes es uno solo: se reparte entre las metas en orden de prioridad para no contar dos veces el mismo dinero.
+      let available = i.isCurrent && i.income > 0 && i.elapsedDays >= PACE_PROJECTION_MIN_DAY ? i.income - i.projected : null;
+      for (const goal of goals) {
+        const p = goalProgress(goal, today, i.income);
+        await emit(cfg, budget, goalCandidate({ id: goal.id, name: goal.name, remaining: p.remaining, perMonth: p.perMonth, done: p.done, overdue: p.overdue, daysLeft: p.daysLeft, projectedSaving: available, today }, cfg));
+        if (available !== null && !p.done && !p.overdue) available = Math.max(0, available - p.perMonth);
+      }
     });
   }
   if (cfg.enabled.unconfirmed) await step("unconfirmed", () => checkUnconfirmed(cfg, now, budget));

@@ -88,38 +88,83 @@ test.describe("categorías y descripciones", () => {
   });
 });
 
-test.describe("meta de ahorro", () => {
-  test("se crea desde el inicio y muestra avance, faltante y cuánto apartar al mes", async ({ page }, info) => {
+test.describe("metas de ahorro", () => {
+  test("se crean varias desde el inicio, se editan y se eliminan; /metas muestra la predicción", async ({ page }, info) => {
     test.skip(info.project.name !== "desktop", "una sola vez: cambia datos");
     await page.goto("/");
-    await expect(page.getByTestId("goal-panel")).toContainText("Crea una meta");
-    await page.getByTestId("edit-goal").click();
-    const dialog = page.getByRole("dialog", { name: "Meta de ahorro" });
+    const panel = page.getByTestId("goal-panel");
+    await expect(panel).toContainText("Crea una meta");
+
+    // Primera meta (con un error de captura primero).
+    await panel.getByTestId("new-goal").click();
+    const dialog = page.getByRole("dialog", { name: "Nueva meta" });
     await dialog.getByLabel("Nombre").fill("Pago de departamento");
-    await dialog.getByLabel("Meta (MXN)").fill("abc");
-    await dialog.getByLabel("Fecha límite").fill("2099-10-05");
+    await dialog.getByLabel("Cuánto cuesta (MXN)").fill("abc");
+    await dialog.getByLabel("Para cuándo").fill("2099-10-05");
     await dialog.getByRole("button", { name: "Guardar" }).click();
     await expect(dialog.getByRole("alert")).toContainText("inválido");
-    await dialog.getByLabel("Meta (MXN)").fill("1600000");
+    await dialog.getByLabel("Cuánto cuesta (MXN)").fill("1600000");
     await dialog.getByLabel("Ahorrado hoy (MXN)").fill("308500");
     await dialog.getByRole("button", { name: "Guardar" }).click();
     await expect(dialog).toBeHidden();
-    const panel = page.getByTestId("goal-panel");
+    await expect(panel.getByTestId("goal-row")).toHaveCount(1);
     await expect(panel).toContainText("Pago de departamento");
-    await expect(page.getByTestId("goal-pct")).toHaveText("19%");
-    await expect(page.getByTestId("goal-remaining")).toContainText("$1,291,500");
-    await expect(page.getByTestId("goal-permonth")).toContainText("$");
-    await expect(panel.getByTestId("insight-list")).toContainText("necesitas apartar");
+    await expect(panel.getByTestId("goal-saved")).toContainText("$308,500");
+    await expect(panel.getByTestId("goal-permonth")).toContainText("$");
+
+    // Segunda meta: solo el mes y prioridad alta.
+    await panel.getByTestId("new-goal").click();
+    const second = page.getByRole("dialog", { name: "Nueva meta" });
+    await second.getByLabel("Nombre").fill("Tesla");
+    await second.getByLabel("Tipo").selectOption("auto");
+    await second.getByLabel("Prioridad").selectOption("1");
+    await second.getByLabel("Cuánto cuesta (MXN)").fill("1200000");
+    await second.getByRole("button", { name: "Solo el mes" }).click();
+    await second.getByLabel("Para cuándo").fill("2099-04");
+    await second.getByRole("button", { name: "Guardar" }).click();
+    await expect(second).toBeHidden();
+    await expect(panel.getByTestId("goal-row")).toHaveCount(2);
+    await expect(panel.getByTestId("goal-row").filter({ hasText: "Tesla" })).toContainText("abril 2099");
+    await expect(panel.getByTestId("goal-row").first()).toContainText("Tesla"); // prioridad alta primero
+
+    // Página de análisis.
+    await panel.getByTestId("goals-detail").click();
+    await expect(page).toHaveURL(/\/metas$/);
+    await expect(page.getByRole("heading", { name: "Metas", level: 1 })).toBeVisible();
+    await expect(page.getByTestId("goal-card")).toHaveCount(2);
+    await expect(page.getByTestId("goals-surplus")).toContainText("$");
+    await expect(page.getByTestId("scenarios")).toContainText("Como vas hoy");
+    await expect(page.getByTestId("recap-generate")).toBeVisible();
+
+    // Editar y eliminar desde el inicio.
+    await page.goto("/");
+    await panel.getByTestId("goal-row").filter({ hasText: "Tesla" }).getByTestId("edit-goal").click();
+    const edit = page.getByRole("dialog", { name: "Editar meta" });
+    await edit.getByLabel("Nombre").fill("Tesla Model Y");
+    await edit.getByRole("button", { name: "Guardar" }).click();
+    await expect(edit).toBeHidden();
+    await expect(panel).toContainText("Tesla Model Y");
+    await panel.getByTestId("goal-row").filter({ hasText: "Tesla Model Y" }).getByTestId("edit-goal").click();
+    const del = page.getByRole("dialog", { name: "Editar meta" });
+    await del.getByTestId("delete-goal").click();
+    await del.getByTestId("confirm-delete-goal").click();
+    await expect(del).toBeHidden();
+    await expect(panel.getByTestId("goal-row")).toHaveCount(1);
+    await expect(panel).not.toContainText("Tesla");
   });
 
-  test("la meta queda arriba (antes de las tarjetas) y el celular no se desborda", async ({ page }, info) => {
+  test("las metas quedan arriba (antes de las tarjetas) y el celular no se desborda", async ({ page }, info) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
     const top = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
     expect(await top('[data-testid="goal-panel"]')).toBeLessThan(await top('section[aria-label="Tarjetas"]'));
     if (info.project.name === "mobile") {
-      const { sw, cw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
-      expect(sw).toBeLessThanOrEqual(cw);
+      for (const path of ["/", "/metas"]) {
+        await page.goto(path);
+        await page.waitForLoadState("networkidle");
+        const { sw, cw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+        expect(sw, path).toBeLessThanOrEqual(cw);
+      }
     }
   });
 });

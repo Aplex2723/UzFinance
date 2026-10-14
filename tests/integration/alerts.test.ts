@@ -12,7 +12,7 @@ import {
 import { localDate } from "@/lib/time";
 import { createCard } from "@/lib/repo/cards";
 import { createCategory } from "@/lib/repo/categories";
-import { setGoal } from "@/lib/repo/goals";
+import { createGoal } from "@/lib/repo/goals";
 import { setMonthlyIncome } from "@/lib/repo/settings";
 import { getChangeRevision, ingestTransaction } from "@/lib/repo/transactions";
 import { getCategorizer } from "@/lib/categorizer";
@@ -311,20 +311,31 @@ describe("evaluación periódica", () => {
   });
   it("meta de ahorro: se aleja del ritmo → aviso; máximo uno por semana ISO", async () => {
     await setMonthlyIncome(20_000_00);
-    await setGoal({ name: "Viaje", targetCents: 100_000_00, targetDate: "2027-04-01", savedCents: 0, savedAsOf: "2026-10-01" });
+    await createGoal({ name: "Viaje", kind: "viaje", priority: 2, monthOnly: false, targetCents: 100_000_00, targetDate: "2027-04-01", savedCents: 0 }, "2026-10-01");
     await mk({ date: "2026-10-03", cents: 15_000_00, merchant: "OCT" });
     await evaluatePeriodicAlerts(N12); // lunes 12 → semana 42
     const g = () => alerts().then((x) => x.filter((a) => a.rule === "goal_off_track"));
     expect(await g()).toHaveLength(1);
-    expect((await g())[0]).toMatchObject({ severity: "high", dedupeKey: "goal:2026-W42" });
+    expect((await g())[0]).toMatchObject({ severity: "high", dedupeKey: expect.stringMatching(/^goal:\d+:2026-W42$/) });
     await evaluatePeriodicAlerts(new Date("2026-10-14T18:00:00Z"));
     expect(await g()).toHaveLength(1);
     await evaluatePeriodicAlerts(new Date("2026-10-19T18:00:00Z")); // semana 43
     expect(await g()).toHaveLength(2);
   });
+  it("varias metas: el ahorro proyectado se reparte por prioridad, cada una con su aviso", async () => {
+    await setMonthlyIncome(20_000_00);
+    await mk({ date: "2026-10-03", cents: 15_000_00, merchant: "OCT" }); // sobrarían ~$5,000 este mes
+    const first = await createGoal({ name: "Primera", kind: "otro", priority: 1, monthOnly: false, targetCents: 6_000_00, targetDate: "2026-12-31", savedCents: 0 }, "2026-10-01");
+    const second = await createGoal({ name: "Segunda", kind: "otro", priority: 2, monthOnly: false, targetCents: 12_000_00, targetDate: "2026-12-31", savedCents: 0 }, "2026-10-01");
+    await evaluatePeriodicAlerts(N12);
+    const found = (await alerts()).filter((a) => a.rule === "goal_off_track");
+    // Ambas piden más de lo que sobra, y a la segunda ya no le queda nada tras la primera.
+    expect(found.map((a) => a.dedupeKey).sort()).toEqual([`goal:${first.id}:2026-W42`, `goal:${second.id}:2026-W42`].sort());
+    expect(found.find((a) => a.dedupeKey?.startsWith(`goal:${second.id}:`))?.body).toContain("sobrarían $0.00");
+  });
   it("meta ya lograda: nada", async () => {
     await setMonthlyIncome(20_000_00);
-    await setGoal({ name: "Listo", targetCents: 1_000_00, targetDate: "2027-04-01", savedCents: 1_000_00, savedAsOf: "2026-10-01" });
+    await createGoal({ name: "Listo", kind: "otro", priority: 2, monthOnly: false, targetCents: 1_000_00, targetDate: "2027-04-01", savedCents: 1_000_00 }, "2026-10-01");
     await mk({ date: "2026-10-03", cents: 15_000_00, merchant: "OCT" });
     await evaluatePeriodicAlerts(N12);
     expect((await alerts()).filter((a) => a.rule === "goal_off_track")).toEqual([]);
@@ -691,13 +702,15 @@ describe("hooks de ingesta", () => {
     const j = await res.json();
     expect(j).toMatchObject({ status: "created", id: expect.any(Number) });
     await flushAlertWork();
-    const a = await alerts();
+    // Solo la alerta de compra fuerte: con el reloj real, la de ritmo de gasto también puede dispararse según el día del mes.
+    const large = async () => (await alerts()).filter((x) => x.rule === "large_purchase");
+    const a = await large();
     expect(a).toHaveLength(1);
     expect(a[0]).toMatchObject({ rule: "large_purchase", severity: "warn", txId: j.id });
     // Reenviar el mismo correo: duplicate, sin alertas nuevas.
     expect(await (await postEmail(req("/api/ingest/email", { method: "POST", body, headers: { ...ip(), authorization: `Bearer ${EMAIL_TOKEN}` } }))).json()).toEqual({ status: "duplicate" });
     await flushAlertWork();
-    expect(await alerts()).toHaveLength(1);
+    expect(await large()).toHaveLength(1);
   });
   it("/api/ingest/email: si la alerta falla, el correo igual se registra", async () => {
     fail.on = true;

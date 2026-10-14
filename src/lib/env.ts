@@ -72,6 +72,8 @@ const schema = z.object({
   /** rules = solo reglas; jev = reglas + historial + Jev (necesita OPENROUTER_API_KEY; sin ella cae a reglas). */
   CATEGORIZER: z.enum(["rules", "jev"]).default("rules"),
   OPENROUTER_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(20).optional()),
+  /** Modelo de OpenRouter para el resumen de metas (por omisión anthropic/claude-haiku-5.5). */
+  GOALS_LLM_MODEL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().regex(/^[\w.~-]+\/[\w.:~-]+$/, "GOALS_LLM_MODEL: formato proveedor/modelo").max(80).optional()),
   DB_SERVER: z.string().min(1),
   DB_PORT: z.coerce.number().default(1433),
   DB_NAME: z.string().min(1),
