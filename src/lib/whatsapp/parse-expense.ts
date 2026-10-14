@@ -472,7 +472,7 @@ export function parseExpense(raw: string, ctx: ParseCtx): Parsed {
   const planned = toks.filter((t) => t.kind === "installments" && t.months !== undefined);
   let installments: number | null = null;
   if (planned.length) {
-    if (new Set(planned.map((t) => t.months)).size > 1) return { kind: "reject", reason: "Veo más de una cifra de meses. Escribe una sola, por ejemplo: 3820 amex beatriz a 3 msi" };
+    if (new Set(planned.map((t) => t.months)).size > 1) return { kind: "reject", reason: "Veo más de una cifra de meses. Escribe una sola, por ejemplo: 3820 amex marisol a 3 msi" };
     installments = planned[0].months!;
     if (installments < MSI_MIN || installments > MSI_MAX) return { kind: "reject", reason: `Las compras a meses sin intereses son de ${MSI_MIN} a ${MSI_MAX} mensualidades. Si no es a MSI, quita esa parte del mensaje.` };
   }

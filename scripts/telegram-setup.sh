@@ -11,8 +11,8 @@
 #   scripts/telegram-setup.sh --webhook-only         # solo (re)registra el webhook con el token y el secreto YA guardados en Azure (conserva los mensajes en cola)
 #   scripts/telegram-setup.sh --delete-webhook       # quita el webhook (el bot deja de recibir mensajes)
 #
-# Variables opcionales (por omisión, los datos de producción de UzFinance):
-#   UZ_SUBSCRIPTION  UZ_RG  UZ_APP
+# Destino en Azure (obligatorio): UZ_SUBSCRIPTION, UZ_RG y UZ_APP, ya sea exportadas o en un archivo `.env.azure`
+# en la raíz del repo (ignorado por git). Ejemplo en `.env.azure.example`.
 #
 # Seguridad del script:
 #   - El token del bot (BotFather) se pide con `read -s`: no se ve en pantalla, no entra al historial del shell ni pasa por el chat.
@@ -29,9 +29,11 @@
 set -euo pipefail
 umask 077
 
-SUB="${UZ_SUBSCRIPTION:-61c871ca-30f7-43ef-a9c7-910fa8c0a5a5}"
-RG="${UZ_RG:-rg-uzfinance}"
-APP="${UZ_APP:-uzfinance-092d5}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -f "$ROOT/.env.azure" ]; then set -a; . "$ROOT/.env.azure"; set +a; fi
+SUB="${UZ_SUBSCRIPTION:?Define UZ_SUBSCRIPTION (o créalo en .env.azure; ver .env.azure.example)}"
+RG="${UZ_RG:?Define UZ_RG (o créalo en .env.azure)}"
+APP="${UZ_APP:?Define UZ_APP (o créalo en .env.azure)}"
 WEBHOOK_PATH="/api/telegram"
 WEBHOOK_URL="https://$APP.azurewebsites.net$WEBHOOK_PATH"
 AUTH_API="2022-03-01"
@@ -241,7 +243,7 @@ TG_USERNAME="${R#ok }"
 echo "Bot verificado: @$TG_USERNAME"
 echo
 
-echo "IDs de Telegram autorizados: 123456789=Uziel,987654321=Ana (de 0 a 5 personas)."
+echo "IDs de Telegram autorizados: 123456789=Alex,987654321=Sam (de 0 a 5 personas)."
 echo "Déjalo VACÍO para el modo descubrimiento: el bot solo responde /id; cada quien se lo pide, y luego repites este script con los IDs."
 [ -n "$OLD_ALLOWED" ] && echo "Autorizados actuales: $OLD_ALLOWED  (Enter = conservarlos; '-' = vaciar la lista)"
 read -r -p "Autorizados: " TG_ALLOWED

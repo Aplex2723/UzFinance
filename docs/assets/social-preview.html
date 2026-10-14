@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8">
+<style>
+@font-face{font-family:SG;src:url(../../node_modules/@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2);font-weight:300 700}
+@font-face{font-family:IN;src:url(../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2);font-weight:100 900}
+*{box-sizing:border-box;margin:0}
+body{width:1280px;height:640px;overflow:hidden;background:#07070a;color:#fff;font-family:IN,sans-serif;position:relative}
+.glow{position:absolute;inset:0;background:radial-gradient(700px 420px at 12% 8%,rgba(255,77,28,.35),transparent 70%),radial-gradient(600px 400px at 95% 100%,rgba(255,77,28,.18),transparent 70%)}
+.left{position:absolute;left:64px;top:76px;width:600px}
+.brand{display:flex;align-items:center;gap:14px;font:600 30px SG;letter-spacing:-.3px}
+.brand img{width:44px;height:44px;border-radius:11px}
+h1{font:700 54px/1.04 SG;letter-spacing:-1.5px;margin-top:44px}
+h1 em{font-style:normal;color:#ff6a3d}
+p{margin-top:24px;font-size:21px;line-height:1.45;color:#b8b8c2}
+.tags{position:absolute;left:64px;bottom:60px;display:flex;gap:10px;flex-wrap:wrap;width:600px}
+.tags span{border:1px solid #2c2c35;background:#111116;border-radius:999px;padding:8px 16px;font-size:15px;color:#d2d2da}
+.shot{position:absolute;left:640px;top:70px;width:900px;border-radius:16px;border:1px solid #2e2e38;box-shadow:0 40px 90px -20px #000,0 0 0 1px #000;transform:rotate(-1.5deg)}
+.phone{position:absolute;left:1020px;top:210px;width:210px;border-radius:26px;border:6px solid #17171d;box-shadow:0 30px 70px -10px #000}
+</style>
+<div class="glow"></div>
+<div class="left">
+  <div class="brand"><img src="../../public/icons/icon-192.png" alt="">UzFinance</div>
+  <h1>Tus gastos,<br><em>solos</em> y bajo tu control.</h1>
+  <p>Captura automática desde Apple Pay y correos del banco, en tu propio Azure. Código abierto.</p>
+</div>
+<div class="tags"><span>Next.js 16</span><span>SQL Server</span><span>PWA</span><span>Azure</span><span>Telegram</span><span>MIT</span></div>
+<img class="shot" src="../screenshots/dashboard.png" alt="">
+<img class="phone" src="../screenshots/mobile-dashboard.png" alt="">
+</html>

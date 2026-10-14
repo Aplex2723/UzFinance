@@ -567,24 +567,24 @@ const plans = async () =>
 const planOf = async (txId: number) => (await query<{ plan_id: number | null }>(`SELECT plan_id FROM dbo.transactions WHERE id=${txId}`))[0]?.plan_id ?? null;
 
 describe("compra a meses sin intereses (MSI) por chat", () => {
-  it("«3820 AMEX beatriz a 3 msi»: gasto completo + plan ligado, y avisa las mensualidades", async () => {
-    const r = await tgSay("3820 AMEX beatriz a 3 msi");
-    expect(r).toContain("✅ Registrado: $3,820.00 · Beatriz · Amex Platinum");
+  it("«3820 AMEX marisol a 3 msi»: gasto completo + plan ligado, y avisa las mensualidades", async () => {
+    const r = await tgSay("3820 AMEX marisol a 3 msi");
+    expect(r).toContain("✅ Registrado: $3,820.00 · Marisol · Amex Platinum");
     expect(r).toContain("A 3 meses sin intereses: 3 pagos de $1,273.33");
     expect(r).toContain("No conozco el corte"); // sin estados de cuenta cargados
     const [t] = await txs();
-    expect(t).toMatchObject({ merchant: "Beatriz", cents: 382_000, card: "Amex Platinum" });
+    expect(t).toMatchObject({ merchant: "Marisol", cents: 382_000, card: "Amex Platinum" });
     const [p] = await plans();
-    expect(p).toMatchObject({ merchant: "Beatriz", original: 382_000, monthly: 127_333, pending: 254_667, n_total: 3, n_current: 1, source: "manual", card: "Amex Platinum", started_on: "2026-10-04" });
+    expect(p).toMatchObject({ merchant: "Marisol", original: 382_000, monthly: 127_333, pending: 254_667, n_total: 3, n_current: 1, source: "manual", card: "Amex Platinum", started_on: "2026-10-04" });
     expect(await planOf(t.id)).toBe(p.id);
   });
 
   it("con un corte conocido de la tarjeta el primer cobro cae en el periodo de la compra", async () => {
     const amex = (await query<{ id: number }>("SELECT id FROM dbo.cards WHERE name='Amex Platinum'"))[0].id;
     await upsertPlan({ cardId: amex, merchant: "OTRA COSA", originalCents: 600_000, monthlyCents: 100_000, pendingCents: 300_000, nTotal: 6, nCurrent: 3, asOf: "2026-09-25", startedOn: "2026-07-10", source: "statement" });
-    const r = await tgSay("3820 amex beatriz a 3 msi");
+    const r = await tgSay("3820 amex marisol a 3 msi");
     expect(r).not.toContain("No conozco el corte");
-    const p = (await plans()).find((x) => x.merchant === "Beatriz")!;
+    const p = (await plans()).find((x) => x.merchant === "Marisol")!;
     expect(p.as_of).toBe("2026-10-25"); // compra el 4-oct, corte del 25 → cierra el 25-oct
   });
 
@@ -602,7 +602,7 @@ describe("compra a meses sin intereses (MSI) por chat", () => {
   });
 
   it("si falta el monto lo pregunta (total) y conserva los meses", async () => {
-    expect(await tgSay("beatriz amex a 3 msi")).toContain("en total");
+    expect(await tgSay("marisol amex a 3 msi")).toContain("en total");
     const r = await tgSay("3820");
     expect(r).toContain("A 3 meses sin intereses");
     expect((await plans())[0]).toMatchObject({ original: 382_000, n_total: 3 });
@@ -617,7 +617,7 @@ describe("compra a meses sin intereses (MSI) por chat", () => {
   });
 
   it("deshacer borra el gasto Y su plan", async () => {
-    await tgSay("3820 amex beatriz a 3 msi");
+    await tgSay("3820 amex marisol a 3 msi");
     expect(await plans()).toHaveLength(1);
     expect(await tgSay("deshacer")).toContain("Deshecho");
     expect(await txs()).toHaveLength(0);
@@ -625,7 +625,7 @@ describe("compra a meses sin intereses (MSI) por chat", () => {
   });
 
   it("deshacer no borra un plan de estado de cuenta ni uno que otra compra sigue usando", async () => {
-    await tgSay("3820 amex beatriz a 3 msi");
+    await tgSay("3820 amex marisol a 3 msi");
     const [p] = await plans();
     await query("UPDATE dbo.installment_plans SET source='statement' WHERE id=@id".replace("@id", String(p.id)));
     await tgSay("deshacer");
@@ -633,20 +633,20 @@ describe("compra a meses sin intereses (MSI) por chat", () => {
   });
 
   it("el estado de cuenta que trae la misma compra adopta el plan en vez de duplicarlo (aunque el comercio se llame distinto)", async () => {
-    await tgSay("3820 amex beatriz a 3 msi");
+    await tgSay("3820 amex marisol a 3 msi");
     const [mine] = await plans();
     const amex = (await query<{ id: number }>("SELECT id FROM dbo.cards WHERE name='Amex Platinum'"))[0].id;
-    const r = await upsertPlan({ cardId: amex, merchant: "MERCADO PAGO*BEATRIZ", originalCents: 382_000, monthlyCents: 127_333, pendingCents: 127_334, nTotal: 3, nCurrent: 2, asOf: "2026-11-25", startedOn: "2026-10-06", source: "statement" });
+    const r = await upsertPlan({ cardId: amex, merchant: "MERCADO PAGO*MARISOL", originalCents: 382_000, monthlyCents: 127_333, pendingCents: 127_334, nTotal: 3, nCurrent: 2, asOf: "2026-11-25", startedOn: "2026-10-06", source: "statement" });
     expect(r).toEqual({ id: mine.id, status: "updated" });
     const all = await plans();
     expect(all).toHaveLength(1);
-    expect(all[0]).toMatchObject({ merchant: "Beatriz", source: "statement", n_current: 2, as_of: "2026-11-25" });
+    expect(all[0]).toMatchObject({ merchant: "Marisol", source: "statement", n_current: 2, as_of: "2026-11-25" });
     // y el siguiente estado actualiza ese mismo plan por su llave nueva
-    expect((await upsertPlan({ cardId: amex, merchant: "MERCADO PAGO*BEATRIZ", originalCents: 382_000, monthlyCents: 127_333, pendingCents: 0, nTotal: 3, nCurrent: 3, asOf: "2026-12-25", startedOn: "2026-10-06", source: "statement" })).id).toBe(mine.id);
+    expect((await upsertPlan({ cardId: amex, merchant: "MERCADO PAGO*MARISOL", originalCents: 382_000, monthlyCents: 127_333, pendingCents: 0, nTotal: 3, nCurrent: 3, asOf: "2026-12-25", startedOn: "2026-10-06", source: "statement" })).id).toBe(mine.id);
   });
 
   it("otra compra con monto o meses distintos NO se adopta", async () => {
-    await tgSay("3820 amex beatriz a 3 msi");
+    await tgSay("3820 amex marisol a 3 msi");
     const amex = (await query<{ id: number }>("SELECT id FROM dbo.cards WHERE name='Amex Platinum'"))[0].id;
     await upsertPlan({ cardId: amex, merchant: "OTRA", originalCents: 382_000, monthlyCents: 63_667, pendingCents: 318_333, nTotal: 6, nCurrent: 1, asOf: "2026-11-25", startedOn: "2026-10-06", source: "statement" });
     expect(await plans()).toHaveLength(2);

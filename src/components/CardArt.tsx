@@ -126,37 +126,23 @@ function Background({ art, color, id }: { art: CardArtId; color: string; id: str
 
 const LIGHT: ReadonlySet<CardArtId> = new Set(["amex-platinum"]);
 
-/** Diseños con la imagen real de la tarjeta (public/cards). Los demás se dibujan en SVG. */
-export const PHOTO_ART: Partial<Record<CardArtId, string>> = {
-  "amex-platinum": "/cards/amex-platinum.webp",
-  "banamex-explora": "/cards/banamex-explora.webp",
-  "banamex-costco": "/cards/banamex-costco.webp",
-  nu: "/cards/nu.webp",
-};
-
 /**
- * Tarjeta ilustrada (foto real si existe, o SVG propio): se reconoce de un vistazo
+ * Tarjeta ilustrada (SVG propio, sin imágenes ni logotipos oficiales): se reconoce de un vistazo
  * por emisor/producto y muestra nombre y últimos dígitos encima.
  */
 export function CardArt({ card, className = "", compact = false, bare = false }: { card: ArtCard; className?: string; compact?: boolean; /** Sin nombre ni dígitos encima (montones del tarjetero). */ bare?: boolean }) {
   const id = useId().replace(/:/g, "");
   const art = resolveArt(card);
-  const photo = PHOTO_ART[art];
-  const ink = !photo && LIGHT.has(art) ? "text-[#1c1d21]" : "text-white";
+  const ink = LIGHT.has(art) ? "text-[#1c1d21]" : "text-white";
   return (
     <div className={`relative aspect-[1.586/1] w-full overflow-hidden rounded-[14px] shadow-[0_14px_30px_-14px_rgb(0_0_0/0.9),inset_0_0_0_1px_rgb(255_255_255/0.12)] ${className}`} data-art={art}>
-      {photo ? (
-        // eslint-disable-next-line @next/next/no-img-element -- imagen estática local ya optimizada (webp)
-        <img src={photo} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
-      ) : (
-        <svg viewBox="0 0 320 202" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" aria-hidden focusable="false">
-          <Background art={art} color={card.color} id={id} />
-        </svg>
-      )}
+      <svg viewBox="0 0 320 202" className="absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" aria-hidden focusable="false">
+        <Background art={art} color={card.color} id={id} />
+      </svg>
       {!bare && (
         <div className={`absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-[5%] ${ink}`}>
-          <p className={`min-w-0 truncate font-medium leading-tight ${photo ? "rounded-full bg-black/60 px-2 py-0.5 backdrop-blur-sm" : "drop-shadow-sm"} ${compact ? "text-[10px]" : "text-[12px]"}`}>{card.name}</p>
-          {card.last4 && <p className={`num shrink-0 tracking-widest ${photo ? "rounded-full bg-black/60 px-2 py-0.5 backdrop-blur-sm" : ""} ${compact ? "text-[10px]" : "text-[12px]"}`}>•••• {card.last4}</p>}
+          <p className={`min-w-0 truncate font-medium leading-tight drop-shadow-sm ${compact ? "text-[10px]" : "text-[12px]"}`}>{card.name}</p>
+          {card.last4 && <p className={`num shrink-0 tracking-widest ${compact ? "text-[10px]" : "text-[12px]"}`}>•••• {card.last4}</p>}
         </div>
       )}
     </div>

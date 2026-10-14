@@ -26,7 +26,7 @@ export const whatsappEnvShape = {
   WHATSAPP_APP_SECRET: optionalText,
   WHATSAPP_ACCESS_TOKEN: optionalText,
   WHATSAPP_PHONE_NUMBER_ID: optionalText,
-  /** "5215512345678=Uziel,5215587654321=Ana" (1 a 5 personas). */
+  /** "5215512345678=Alex,5215587654321=Sam" (1 a 5 personas). */
   WHATSAPP_ALLOWED: optionalText,
   /** Versión de la Graph API; por omisión v25.0. */
   WHATSAPP_GRAPH_VERSION: optionalText,
@@ -44,7 +44,7 @@ export const telegramEnvShape = {
   TELEGRAM_BOT_TOKEN: optionalText,
   /** `secret_token` del setWebhook: Telegram lo devuelve en el encabezado X-Telegram-Bot-Api-Secret-Token de cada POST. */
   TELEGRAM_WEBHOOK_SECRET: optionalText,
-  /** "123456789=Uziel,987654321=Ana": id numérico de usuario=Nombre (0 a 5). Vacío = modo descubrimiento (el bot solo responde /id). */
+  /** "123456789=Alex,987654321=Sam": id numérico de usuario=Nombre (0 a 5). Vacío = modo descubrimiento (el bot solo responde /id). */
   TELEGRAM_ALLOWED: optionalText,
   /** Usuario del bot (sin @): ignora comandos dirigidos a otro bot en un grupo (/resumen@OtroBot) y detecta menciones y respuestas al bot. */
   TELEGRAM_BOT_USERNAME: optionalText,
@@ -59,7 +59,7 @@ const schema = z.object({
   /** Opcional: si se define, el claim tid del principal debe coincidir. */
   ALLOWED_TENANT_ID: z.string().optional(),
   INGEST_TOKEN: z.string().min(32, "INGEST_TOKEN debe tener al menos 32 caracteres"),
-  /** Token anterior, aceptado durante la rotación (ver README). */
+  /** Token anterior, aceptado durante la rotación (ver docs/DEPLOY-AZURE.md). */
   INGEST_TOKEN_PREVIOUS: z.string().min(32).optional(),
   /**
    * Tokens del puente Gmail (Apps Script), DISTINTOS al del Atajo: "nombre=token,otro=token".

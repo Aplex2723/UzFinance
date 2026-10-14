@@ -44,7 +44,7 @@ const clean = (...texts: string[]) => {
     expect(s).not.toContain(TG.token);
     expect(s).not.toContain(TG.token.split(":")[1]);
     expect(s).not.toContain("api.telegram.org");
-    expect(s).not.toContain(String(TG.uziel));
+    expect(s).not.toContain(String(TG.alex));
   }
 };
 const failure = async (p: Promise<unknown>) => {
@@ -66,7 +66,7 @@ describe("sendText", () => {
   });
   it("URL, método, cabeceras y cuerpo exactos: texto plano, sin parse_mode", async () => {
     const { f, calls } = fakeFetch(ok);
-    await mk(f).sendText(String(TG.uziel), "Hola mundo <b>x</b>");
+    await mk(f).sendText(String(TG.alex), "Hola mundo <b>x</b>");
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe(`https://api.telegram.org/bot${TG.token}/sendMessage`);
     expect(calls[0].init.method).toBe("POST");
@@ -158,13 +158,13 @@ describe("sendText", () => {
   });
   it("error de red → no lanza y el log no trae el token ni el chat", async () => {
     const { f } = fakeFetch(() => { throw new TypeError(`fetch failed https://api.telegram.org/bot${TG.token}/sendMessage`); });
-    await expect(mk(f).sendText(String(TG.uziel), "hola")).resolves.toBeUndefined();
+    await expect(mk(f).sendText(String(TG.alex), "hola")).resolves.toBeUndefined();
     clean();
     expect(logs.join("\n")).toContain("error de red");
   });
   it("nada de lo que loguea contiene el token ni el cuerpo, en ningún escenario", async () => {
     for (const r of [err(429, "x", { parameters: { retry_after: 1 } }), err(500, `error con ${TG.token}`), err(403, "bot bloqueado")]) {
-      await mk(fakeFetch(r).f).sendText(String(TG.uziel), "gasto secreto farmacia-inventada");
+      await mk(fakeFetch(r).f).sendText(String(TG.alex), "gasto secreto farmacia-inventada");
     }
     clean();
     expect(logs.join("\n")).not.toContain("farmacia-inventada");

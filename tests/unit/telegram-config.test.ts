@@ -8,7 +8,7 @@ describe("getTelegramConfig", () => {
     expect(c).toEqual({
       botToken: TG.token,
       webhookSecret: TG.secret,
-      allowed: [{ waId: "tg111111111", name: "Uziel" }, { waId: "tg222222222", name: "Ana" }],
+      allowed: [{ waId: "tg111111111", name: "Alex" }, { waId: "tg222222222", name: "Sam" }],
       allowedChats: [],
       botUsername: "uzfinanceinventadobot",
       appUrl: "https://uz-inventada.azurewebsites.net",
@@ -34,7 +34,7 @@ describe("getTelegramConfig", () => {
     ["secreto corto", { TELEGRAM_WEBHOOK_SECRET: "a".repeat(31) }],
     ["secreto largo", { TELEGRAM_WEBHOOK_SECRET: "a".repeat(257) }],
     ["secreto con caracteres raros", { TELEGRAM_WEBHOOK_SECRET: "secreto con espacios 0123456789abcdef!" }],
-    ["lista de autorizados inválida", { TELEGRAM_ALLOWED: "no-es-un-id=Uziel" }],
+    ["lista de autorizados inválida", { TELEGRAM_ALLOWED: "no-es-un-id=Alex" }],
     ["chats permitidos inválidos", { TELEGRAM_ALLOWED_CHATS: "-100123,basura" }],
     ["usuario del bot inválido", { TELEGRAM_BOT_USERNAME: "no válido!" }],
   ] as [string, Record<string, string | undefined>][])("%s → null", (_n, over) => {
@@ -84,27 +84,27 @@ describe("parseAllowed", () => {
     expect(parseAllowed(`${five},6000006=Pf`)).toBeNull();
   });
   it("tolera espacios y comas sobrantes", () => {
-    expect(parseAllowed(" 123456789 = Uziel , 987654321=Ana ,")).toEqual([{ waId: "tg123456789", name: "Uziel" }, { waId: "tg987654321", name: "Ana" }]);
+    expect(parseAllowed(" 123456789 = Alex , 987654321=Sam ,")).toEqual([{ waId: "tg123456789", name: "Alex" }, { waId: "tg987654321", name: "Sam" }]);
   });
   it("acepta nombres con acentos, punto, apóstrofo y guion", () => {
     expect(parseAllowed("123456789=José Ángel Mª-O'Neil Jr.")).toHaveLength(1);
   });
   it.each([
     ["sin igual", "123456789"],
-    ["sin id", "=Uziel"],
+    ["sin id", "=Alex"],
     ["sin nombre", "123456789="],
-    ["id con letras", "12345abc=Uziel"],
+    ["id con letras", "12345abc=Alex"],
     ["id negativo (un grupo, no una persona)", "-100123456=Casa"],
-    ["id con +", "+123456789=Uziel"],
-    ["id con cero a la izquierda", "0123456789=Uziel"],
-    ["id cero", "0=Uziel"],
-    ["id de más de 15 dígitos", "1234567890123456=Uziel"],
-    ["nombre con dígitos", "123456789=Uziel2"],
+    ["id con +", "+123456789=Alex"],
+    ["id con cero a la izquierda", "0123456789=Alex"],
+    ["id cero", "0=Alex"],
+    ["id de más de 15 dígitos", "1234567890123456=Alex"],
+    ["nombre con dígitos", "123456789=Alex2"],
     ["nombre con símbolos", "123456789=Uz<script>"],
     ["nombre de solo signos", "123456789=..."],
     ["nombre largo", "123456789=" + "a".repeat(31)],
-    ["id repetido", "123456789=Uziel,123456789=Ana"],
-    ["una entrada mala invalida todo", "123456789=Uziel,basura"],
+    ["id repetido", "123456789=Alex,123456789=Sam"],
+    ["una entrada mala invalida todo", "123456789=Alex,basura"],
   ])("%s → null", (_n, raw) => {
     expect(parseAllowed(raw)).toBeNull();
   });
@@ -146,8 +146,8 @@ describe("TELEGRAM_ALLOWED_CHATS", () => {
 describe("findSender y maskId", () => {
   const allowed = parseAllowed(TG.allowed)!;
   it("encuentra por 'tg<id>' exacto", () => {
-    expect(findSender(allowed, "tg111111111")).toEqual({ waId: "tg111111111", name: "Uziel" });
-    expect(findSender(allowed, "tg222222222")?.name).toBe("Ana");
+    expect(findSender(allowed, "tg111111111")).toEqual({ waId: "tg111111111", name: "Alex" });
+    expect(findSender(allowed, "tg222222222")?.name).toBe("Sam");
   });
   it("no autoriza prefijos, sufijos ni formas parecidas", () => {
     for (const f of ["tg11111111", "tg1111111111", "111111111", "TG111111111", "tg999999999", "", "tg"]) expect(findSender(allowed, f)).toBeNull();

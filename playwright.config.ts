@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 import { E2E_ENV, E2E_PORT, principal } from "./e2e/env";
 
 const baseURL = `http://localhost:${E2E_PORT}`;
-const extraHTTPHeaders = { "x-ms-client-principal": principal("uziel.francotorres@gmail.com") };
+const extraHTTPHeaders = { "x-ms-client-principal": principal("owner@example.com") };
 
 export default defineConfig({
   testDir: "e2e",

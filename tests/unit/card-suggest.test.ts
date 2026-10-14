@@ -5,7 +5,7 @@ import type { Card } from "@/lib/types";
 let id = 0;
 const card = (name: string, issuer: Card["issuer"], o: Partial<Card> = {}): Card => ({ id: ++id, name, issuer, last4: null, aliases: null, color: "#000", art: null, active: true, needs_name: false, ...o });
 const CARDS = [
-  card("American Express Platinum", "amex"), card("Amex Adicional · América", "amex"), card("Amex Adicional · Beatriz", "amex"),
+  card("American Express Platinum", "amex"), card("Amex Adicional · América", "amex"), card("Amex Adicional · Marisol", "amex"),
   card("Explora Banamex ···046", "banamex"), card("Explora Banamex Virtual ···723", "banamex"), card("Costco Banamex ···194", "banamex"), card("Costco Banamex Virtual ···915", "banamex"),
   card("Débito ···296", "banamex"), card("Domiciliación", "banamex"), card("Nu Mastercard Gold", "nu"),
 ];
@@ -22,9 +22,9 @@ describe("sugerencia de mapa estado → tarjeta", () => {
   });
 
   it("secciones digital/virtual y titulares adicionales se ligan por nombre", () => {
-    const m = suggestCardMap([doc("explora", [{ section: "regular" }, { section: "digital" }]), doc("amex", [{ holder: "AMÉRICA PÉREZ LÓPEZ" }, { holder: "BEATRIZ RUIZ" }, { holder: "TITULAR EJEMPLO" }])], CARDS, null);
+    const m = suggestCardMap([doc("explora", [{ section: "regular" }, { section: "digital" }]), doc("amex", [{ holder: "AMÉRICA PÉREZ LÓPEZ" }, { holder: "MARISOL RUIZ" }, { holder: "TITULAR EJEMPLO" }])], CARDS, null);
     expect(m.explora.sections).toEqual({ digital: "Explora Banamex Virtual ···723" });
-    expect(m.amex.holders).toEqual({ "AMÉRICA PÉREZ LÓPEZ": "Amex Adicional · América", "BEATRIZ RUIZ": "Amex Adicional · Beatriz" });
+    expect(m.amex.holders).toEqual({ "AMÉRICA PÉREZ LÓPEZ": "Amex Adicional · América", "MARISOL RUIZ": "Amex Adicional · Marisol" });
   });
 
   it("ante ambigüedad no propone nada: dos candidatas, ninguna, inactivas", () => {

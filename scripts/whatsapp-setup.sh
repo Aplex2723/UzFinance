@@ -7,8 +7,8 @@
 #   scripts/whatsapp-setup.sh --exclude-path --dry-run   # solo muestra cómo quedaría, sin escribir
 #   scripts/whatsapp-setup.sh --exclude-path --yes       # sin pregunta de confirmación
 #
-# Variables opcionales (por omisión, los datos de producción de UzFinance):
-#   UZ_SUBSCRIPTION  UZ_RG  UZ_APP
+# Destino en Azure (obligatorio): UZ_SUBSCRIPTION, UZ_RG y UZ_APP, ya sea exportadas o en un archivo `.env.azure`
+# en la raíz del repo (ignorado por git). Ejemplo en `.env.azure.example`.
 #
 # Seguridad del script:
 #   - Los secretos (token de acceso y App Secret) se piden con `read -s`: no se ven en pantalla, no entran al historial del shell
@@ -20,9 +20,11 @@
 set -euo pipefail
 umask 077
 
-SUB="${UZ_SUBSCRIPTION:-61c871ca-30f7-43ef-a9c7-910fa8c0a5a5}"
-RG="${UZ_RG:-rg-uzfinance}"
-APP="${UZ_APP:-uzfinance-092d5}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -f "$ROOT/.env.azure" ]; then set -a; . "$ROOT/.env.azure"; set +a; fi
+SUB="${UZ_SUBSCRIPTION:?Define UZ_SUBSCRIPTION (o créalo en .env.azure; ver .env.azure.example)}"
+RG="${UZ_RG:?Define UZ_RG (o créalo en .env.azure)}"
+APP="${UZ_APP:?Define UZ_APP (o créalo en .env.azure)}"
 WEBHOOK_PATH="/api/whatsapp"
 AUTH_API="2022-03-01"
 
@@ -125,7 +127,7 @@ read -r -p "Phone number ID (WhatsApp → Configuración de la API; solo dígito
 WA_PHONE_ID="$(printf '%s' "$WA_PHONE_ID" | tr -d '[:space:]')"
 [[ "$WA_PHONE_ID" =~ ^[0-9]{5,25}$ ]] || { echo "Phone number ID inválido (5 a 25 dígitos)." >&2; exit 1; }
 
-echo "Números autorizados, con lada de país y sin +: 525512345678=Uziel,525587654321=Ana (de 1 a 5 personas)."
+echo "Números autorizados, con lada de país y sin +: 525512345678=Alex,525587654321=Sam (de 1 a 5 personas)."
 read -r -p "Autorizados: " WA_ALLOWED
 WA_ALLOWED="$(printf '%s' "$WA_ALLOWED" | sed -e 's/[[:space:]]*,[[:space:]]*/,/g' -e 's/[[:space:]]*=[[:space:]]*/=/g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 IFS=',' read -r -a ENTRIES <<< "$WA_ALLOWED"

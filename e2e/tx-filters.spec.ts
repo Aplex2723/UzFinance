@@ -19,7 +19,7 @@ test.describe("Transacciones: filtros dinámicos", () => {
   let costcoId = 0;
 
   test.beforeAll(async () => {
-    const api = await pwRequest.newContext({ baseURL: BASE, extraHTTPHeaders: { "x-ms-client-principal": principal("uziel.francotorres@gmail.com") } });
+    const api = await pwRequest.newContext({ baseURL: BASE, extraHTTPHeaders: { "x-ms-client-principal": principal("owner@example.com") } });
     const cards = (await (await api.get("/api/cards")).json()) as { id: number; name: string }[];
     amexId = cards.find((c) => c.name === AMEX)!.id;
     oroId = cards.find((c) => c.name === "Banamex Oro")!.id;

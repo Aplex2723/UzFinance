@@ -8,7 +8,7 @@ export const E2E_ENV = {
   ...process.env,
   NODE_ENV: "production",
   AUTH_MODE: "easyauth",
-  ALLOWED_EMAIL: "uziel.francotorres@gmail.com",
+  ALLOWED_EMAIL: "owner@example.com",
   INGEST_TOKEN: E2E_TOKEN,
   EMAIL_INGEST_TOKENS: "gmail=e2e-email-token-0123456789-abcdefghijklmnopqrstuvwxyz",
   DB_NAME: "uzfinance_e2e",

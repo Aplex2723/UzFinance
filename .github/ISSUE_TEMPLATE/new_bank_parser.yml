@@ -1,0 +1,30 @@
+name: Support for a new bank / issuer
+description: Ask for (or offer to build) a statement or e-mail parser for another bank
+labels: [parser, good first issue]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Parsers are tested with **fabricated** fixtures only. Do not attach real statements or e-mails.
+  - type: input
+    id: bank
+    attributes: { label: Bank / issuer and product, placeholder: "e.g. BBVA Azul" }
+    validations: { required: true }
+  - type: dropdown
+    id: source
+    attributes:
+      label: Which source?
+      multiple: true
+      options: [Statement PDF (with text layer), Purchase alert e-mail, Wallet / Apple Pay only, CSV export]
+    validations: { required: true }
+  - type: textarea
+    id: format
+    attributes:
+      label: Describe the format
+      description: Layout, labels, date/amount formats… Describe or fabricate a sample; do not paste real data.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd like to implement it myself

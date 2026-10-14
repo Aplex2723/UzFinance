@@ -5,7 +5,7 @@ config({ quiet: true });
 process.env.DB_NAME = process.env.TEST_DB_NAME ?? "uzfinance_test";
 process.env.DB_AUTH = "password";
 process.env.AUTH_MODE = "easyauth";
-process.env.ALLOWED_EMAIL = "uziel.francotorres@gmail.com";
+process.env.ALLOWED_EMAIL = "owner@example.com";
 process.env.INGEST_TOKEN = "test-token-0123456789-abcdefghijklmnopqrstuvwxyz";
 process.env.INGEST_TOKEN_PREVIOUS = "";
 delete process.env.INGEST_TOKEN_PREVIOUS;

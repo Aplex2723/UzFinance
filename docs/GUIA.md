@@ -1,8 +1,8 @@
 # UzFinance: guía rápida (contexto para humanos y para una sesión nueva)
 
 Tracker personal de gastos (Amex, Banamex, Nu). UI en español, MXN, tema oscuro, pensado para el iPhone.
-Repo privado: `Aplex2723/UzFinance`. **Un push a `main` despliega a producción** (no hay staging).
-Detalle largo en el [README](../README.md); esto es el resumen operativo.
+Repo: `<tu-usuario>/UzFinance`. **Un push a `main` despliega a producción** (no hay staging).
+Visión general en el [README](../README.md) y guías en [`docs/`](.); esto es el resumen operativo.
 
 ## 1. Cómo funciona
 
@@ -66,8 +66,8 @@ entrada no confiable (no se loguea ni se guarda completo); no declarar algo func
 
 ## 3. Producción (Azure) — datos de referencia
 
-- Grupo `rg-uzfinance`, App Service `uzfinance-092d5`, SQL `uzfinance-sql-092d5`, base `uzfinance`.
-  Nunca tocar recursos fuera de ese grupo; el comando de destrucción está en el README y **no se ejecuta**.
+- Grupo `rg-uzfinance`, App Service `<tu-app>`, SQL `<tu-servidor-sql>`, base `uzfinance`.
+  Nunca tocar recursos fuera de ese grupo; el comando de destrucción está en [DEPLOY-AZURE.md](DEPLOY-AZURE.md) y **no se ejecuta**.
 - **Migraciones: a mano ANTES de desplegar** (la identidad de la app no tiene DDL ni el pipeline las corre):
   abrir una regla temporal de firewall para tu IP → `npx tsx scripts/azure-sql.ts migrate` (con `DB_SERVER`, `DB_NAME`) →
   **borrar la regla**. Fijar `--subscription` explícito en los comandos `az`.
@@ -158,7 +158,7 @@ archivo no repite nada) y lo extraído (`documents.extracted`). Estados: `proces
 volver a subirlo).
 
 - **Comprobante de transferencia** (PDF de la app de Banamex: el texto es imagen). OCR con **Azure AI Vision**
-  (`uzfinance-vision-092d5`, nivel gratuito F0 en South Central US —México Central no ofrece el servicio—, mismo grupo y tenant; la app
+  (`<tu-recurso-vision>`, nivel gratuito F0 en South Central US —México Central no ofrece el servicio—, mismo grupo y tenant; la app
   se autentica con su identidad administrada, rol *Cognitive Services User*, sin llaves; ≈1 s por página; solo se manda la imagen de la
   página, es un OCR y no un LLM) y **doble lectura** a dos resoluciones. Si Azure falla, o no hay `AZURE_VISION_ENDPOINT` (laptop, pruebas),
   cae al OCR **local** (tesseract.js + `@napi-rs/canvas`, idioma español empaquetado; nada sale del servidor, pero en B1 tarda ~100 s por
@@ -207,7 +207,7 @@ volver a subirlo).
     Telegram tiene emisor).
 - **Etiquetas de fuente en la app:** `sourcesLabel` / `SOURCE_UI_LABELS` (`src/lib/chat-sources.ts`) traducen `sources` (“Telegram + Atajo +
   Correo”, “WhatsApp (fecha indicada)”) en Transacciones, Actividad y los hallazgos del estado de cuenta.
-- **Despliegue:** las migraciones `009` y `010` van **a mano antes del push** (regla de firewall temporal; ver el runbook del README). `next.config.ts`
+- **Despliegue:** las migraciones `009` y `010` van **a mano antes del push** (regla de firewall temporal; ver el runbook en [DEPLOY-AZURE.md](DEPLOY-AZURE.md)). `next.config.ts`
   incluye en la traza el idioma del OCR, el worker y el WASM; el proxy admite cuerpos de hasta 14 MB. En el plan B1 el OCR corre de uno en
   uno (≈3 s por comprobante) y libera su memoria a los 60 s de inactividad.
 
@@ -268,7 +268,7 @@ Tu WhatsApp ──► Meta (Cloud API) ──POST /api/whatsapp (firma HMAC)─�
    caducidad *Nunca* y los permisos `whatsapp_business_messaging` y `whatsapp_business_management`. Copia el token (solo se muestra una vez).
 4. **App Secret**: en la app → *Configuración → Básica* → *Clave secreta de la app* → Mostrar.
 5. Corre el script (siguiente sección) con esos datos y luego `--exclude-path`.
-6. En *WhatsApp → Configuración* → **Webhook → Editar**: pega la **URL** (`https://uzfinance-092d5.azurewebsites.net/api/whatsapp`) y el
+6. En *WhatsApp → Configuración* → **Webhook → Editar**: pega la **URL** (`https://<tu-app>.azurewebsites.net/api/whatsapp`) y el
    **verify token** que imprimió el script → *Verificar y guardar*. Después, en *Campos del webhook*, **suscríbete a `messages`**.
 7. Desde un número autorizado escribe `ayuda` al número de prueba. (El primer mensaje puede requerir que lo abras desde *Configuración de la API*
    enviando la plantilla `hello_world`, o simplemente escribirle al número que aparece en *From*.)
@@ -280,7 +280,7 @@ archivo temporal `chmod 600` que borra al terminar y los aplica con `az webapp c
 
 ```bash
 az login                                   # si no hay sesión
-scripts/whatsapp-setup.sh                  # token de acceso, App Secret, Phone number ID, números autorizados, con lada de país (525512345678=Uziel,525587654321=Ana)
+scripts/whatsapp-setup.sh                  # token de acceso, App Secret, Phone number ID, números autorizados, con lada de país (525512345678=Alex,525587654321=Sam)
 scripts/whatsapp-setup.sh --exclude-path --dry-run   # mira cómo quedaría la lista de rutas excluidas
 scripts/whatsapp-setup.sh --exclude-path             # agrega /api/whatsapp a excludedPaths de Easy Auth (pide confirmación)
 ```
@@ -288,8 +288,8 @@ scripts/whatsapp-setup.sh --exclude-path             # agrega /api/whatsapp a ex
 - Genera `WHATSAPP_VERIFY_TOKEN` con `openssl rand` y al final imprime **solo** la URL del webhook y ese token.
 - `--exclude-path` **mezcla** con la lista actual (`/api/ingest`, `/api/ingest/email`, `/manifest.webmanifest`, `/icons/*` y, si ya la agregaste, `/api/telegram`): nunca la
   reemplaza, porque perder una de esas rutas rompe el Atajo, el puente de Gmail o la instalación en el celular. Verifica con:
-  `az rest --method get --uri "/subscriptions/<sub>/resourceGroups/rg-uzfinance/providers/Microsoft.Web/sites/uzfinance-092d5/config/authsettingsV2/list?api-version=2022-03-01" --query properties.globalValidation.excludedPaths -o tsv`
-  (5 rutas con WhatsApp, 6 si también está `/api/telegram`) y `curl -s -o /dev/null -w '%{http_code}\n' https://uzfinance-092d5.azurewebsites.net/api/whatsapp`
+  `az rest --method get --uri "/subscriptions/<sub>/resourceGroups/rg-uzfinance/providers/Microsoft.Web/sites/<tu-app>/config/authsettingsV2/list?api-version=2022-03-01" --query properties.globalValidation.excludedPaths -o tsv`
+  (5 rutas con WhatsApp, 6 si también está `/api/telegram`) y `curl -s -o /dev/null -w '%{http_code}\n' https://<tu-app>.azurewebsites.net/api/whatsapp`
   (sin parámetros) → **403** (de la app; un 302/401 sería Easy Auth).
 - Cambiar App Settings reinicia la app unos segundos. Variables (ver `.env.example`): `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,
   `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ALLOWED`, `WHATSAPP_GRAPH_VERSION` (opcional, `v25.0` por omisión, igual que el script), `APP_URL` (opcional;
@@ -337,7 +337,7 @@ entiende (reacciones, ubicación, stickers, notas de voz…) reciben la misma re
 | Responde "Ocurrió un error…" | El handler falló: el mensaje queda `failed` en `whatsapp_messages`; mira el log (`error procesando …`) y reintenta con otro texto. |
 | Se procesa dos veces | No debería: la llave es el `wamid`. Revisa que la migración `010` esté aplicada. |
 
-Ver logs: `az webapp log tail --name uzfinance-092d5 --resource-group rg-uzfinance --subscription 61c871ca-30f7-43ef-a9c7-910fa8c0a5a5`.
+Ver logs: `az webapp log tail --name <tu-app> --resource-group rg-uzfinance --subscription <subscription-id>`.
 
 **Rotar secretos:** (1) token de acceso: genera uno nuevo en el usuario del sistema (revoca el viejo) y vuelve a correr `scripts/whatsapp-setup.sh`
 (vuelve a pedir todo y genera un verify token nuevo; el verify token solo importa al dar de alta el webhook, así que no hace falta
@@ -351,7 +351,7 @@ de 24 h, funciona en grupos (opcional)** y puede recibir archivos de hasta 20 MB
 `TELEGRAM_ALLOWED`; cualquier otro se ignora **sin respuesta** (la única excepción es el comando `/id`, que devuelve el ID de quien lo pide
 para poder configurarlo). Además manda los avisos de alertas a esas mismas personas (sección 9).
 
-**Compras a meses sin intereses (MSI).** Se escriben igual que un gasto, con los meses: `3820 amex beatriz a 3 msi`, `$12,000 amex iphone a 12
+**Compras a meses sin intereses (MSI).** Se escriben igual que un gasto, con los meses: `3820 amex marisol a 3 msi`, `$12,000 amex iphone a 12
 meses sin intereses`, `5000 amex tele 12msi`, `800 amex cine en 3 mensualidades` (un «N meses» a secas solo cuenta si lo introduce «a/en/por»;
 «hace 2 meses» no). El monto es el **total** de la compra (si falta, el bot lo pregunta «en total»). Entra como cualquier compra —una vez,
 a precio completo— y además crea su plan en `/msi` (mensualidad = total ÷ meses; de 2 a 48 meses; solo tarjetas de crédito: en débito el bot
@@ -418,7 +418,7 @@ Tu Telegram ──► Telegram (Bot API) ──POST /api/telegram (secret_token)
 3. **Descubrimiento:** corre `scripts/telegram-setup.sh`, pega el token y **deja vacíos los autorizados**. Con la lista vacía el bot solo
    responde `/id`.
 4. Cada quien abre el bot y le escribe `/id`: responde `Tu ID de Telegram es 123456789.` (en un grupo también el ID del chat). Junta los IDs.
-5. Vuelve a correr `scripts/telegram-setup.sh` con los IDs (`123456789=Uziel,987654321=Ana`, de 0 a 5; los IDs de grupo **no** van aquí). El
+5. Vuelve a correr `scripts/telegram-setup.sh` con los IDs (`123456789=Alex,987654321=Sam`, de 0 a 5; los IDs de grupo **no** van aquí). El
    script te ofrece reutilizar el token ya guardado en Azure (no hace falta volver a pegarlo).
 6. **Grupo (opcional):** escribe `/id` **dentro del grupo**: el bot responde `Tu ID de Telegram es … El ID de este chat es -100…` (funciona
    aunque el grupo aún no esté permitido). Ese número negativo es el ID del grupo: pégalo en la pregunta "IDs de grupo" del script (queda
@@ -449,7 +449,7 @@ scripts/telegram-setup.sh --delete-webhook        # apaga el bot (quita el webho
   recomendada con grupos: detecta menciones y respuestas al bot e ignora comandos dirigidos a otro bot, `/resumen@OtroBot`).
 - `--exclude-path` **mezcla** con la lista actual (nunca la reemplaza: perder `/api/ingest`, `/api/ingest/email`, `/api/whatsapp`,
   `/manifest.webmanifest` o `/icons/*` rompe el Atajo, el puente de Gmail, WhatsApp o la instalación en el celular). Verifica con el
-  `az rest … excludedPaths` de la sección 10 y `curl -s -o /dev/null -w '%{http_code}\n' https://uzfinance-092d5.azurewebsites.net/api/telegram`
+  `az rest … excludedPaths` de la sección 10 y `curl -s -o /dev/null -w '%{http_code}\n' https://<tu-app>.azurewebsites.net/api/telegram`
   → **405** (de la app; un 302/401 sería Easy Auth).
 
 ### Comandos del bot
@@ -497,7 +497,7 @@ comando desconocido se trata como texto normal. Fotos, notas de voz, stickers, u
 | Responde "Ocurrió un error…" | El handler falló: el mensaje queda `failed` en `whatsapp_messages`; mira el log (`error procesando …`). |
 | Un PDF "pesa demasiado" | Más de 12 MB (el bot no descarga más). Súbelo desde la app. |
 
-Ver logs: `az webapp log tail --name uzfinance-092d5 --resource-group rg-uzfinance --subscription 61c871ca-30f7-43ef-a9c7-910fa8c0a5a5`.
+Ver logs: `az webapp log tail --name <tu-app> --resource-group rg-uzfinance --subscription <subscription-id>`.
 
 **Rotar el token:** en BotFather `/revoke` (elige el bot; el token viejo deja de servir de inmediato) → copia el nuevo → corre `scripts/telegram-setup.sh`
 (pega el token nuevo cuando pregunte si reutilizas el guardado; con token nuevo hay que registrar el webhook otra vez). **Cambiar autorizados o grupos:**
