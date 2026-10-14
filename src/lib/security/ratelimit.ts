@@ -1,6 +1,6 @@
 /**
  * Rate limiter de ventana fija en memoria. Suficiente para una sola
- * instancia (F1/B1 no escalan horizontalmente); documentado en el README.
+ * instancia (F1/B1 no escalan horizontalmente); documentado en docs/DEPLOY-AZURE.md.
  */
 type Bucket = { count: number; resetAt: number };
 

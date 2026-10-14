@@ -29,7 +29,7 @@ const CHAT_ID_RE = /^-?[1-9]\d{0,14}$/;
 export const senderId = (userId: string | number) => `tg${userId}`;
 
 /**
- * "123456789=Uziel,987654321=Ana" → [{waId: "tg123456789", name}]. Vacía ("" o solo espacios) es VÁLIDA y da []: modo descubrimiento.
+ * "123456789=Alex,987654321=Sam" → [{waId: "tg123456789", name}]. Vacía ("" o solo espacios) es VÁLIDA y da []: modo descubrimiento.
  * `null` si algo es inválido (falla cerrado: una lista a medias podría autorizar de más o de menos). 0 a 5 personas sin repetir id.
  */
 export function parseAllowed(raw: string | undefined): Sender[] | null {

@@ -1,0 +1,5 @@
+# Quien aprueba cambios (y en especial los que tocan el pipeline de despliegue).
+*                  @Aplex2723
+/.github/          @Aplex2723
+/scripts/          @Aplex2723
+/db/migrations/    @Aplex2723

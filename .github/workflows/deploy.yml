@@ -18,6 +18,9 @@ jobs:
 
   deploy:
     needs: ci
+    # Solo despliega si el repo tiene configuradas las variables de Azure (Settings → Variables → Actions).
+    # En un fork o en un clon sin ellas, el job se omite y solo corre el CI.
+    if: ${{ vars.AZURE_WEBAPP_NAME != '' && vars.AZURE_CLIENT_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

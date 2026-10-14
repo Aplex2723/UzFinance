@@ -28,7 +28,7 @@ export function help(channel: ChatChannel = "whatsapp"): string {
     "• 350 starbucks amex",
     "• ayer 450 oxxo débito",
     "• gasté $1,200.50 en gasolina con la explora",
-    "• 3820 amex beatriz a 3 msi (compra a meses sin intereses: el monto es el total)",
+    "• 3820 amex marisol a 3 msi (compra a meses sin intereses: el monto es el total)",
     "",
     "También leo comprobantes de transferencia y estados de cuenta en PDF.",
     "Comandos: *tarjetas*, *hoy*, *resumen*, *deshacer*, *cancelar*.",

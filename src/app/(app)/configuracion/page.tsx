@@ -47,7 +47,7 @@ export default async function Page() {
           <p className="mb-2 text-muted">Endpoint (POST, JSON):</p>
           <code className="block break-all rounded-lg bg-black/40 p-2.5">{proto}://{host}/api/ingest</code>
           <p className="mt-3 text-muted">Header: <code className="text-fg">Authorization: Bearer &lt;INGEST_TOKEN&gt;</code></p>
-          <p className="mt-3 text-[11px] text-muted">El token nunca se muestra aquí. Se guarda como app setting y se rota con el procedimiento del README (sección “Rotación del token”).</p>
+          <p className="mt-3 text-[11px] text-muted">El token nunca se muestra aquí. Se guarda como app setting y se rota con el procedimiento de docs/DEPLOY-AZURE.md (sección “Rotación del token de ingesta”).</p>
         </Panel>
         <Panel title="Alertas y documentos">
           <p className="mb-3 text-muted">Ajusta cuándo te avisa la app (montos, reglas, comercios silenciados, horas de silencio) y a qué tarjeta corresponde cada estado de cuenta que subes.</p>

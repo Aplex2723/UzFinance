@@ -56,7 +56,7 @@ describe("mapeo a InboundMessage", () => {
     expect(msgOf(update(5011, { document: "x" }))?.type).toBe("other");
   });
   it("grupo y supergrupo: replyTo es el chat (negativo) y from sigue siendo el usuario", () => {
-    const g = msgOf(update(5012, { text: "/hoy", from: user(TG.ana), chat: groupChat(TG.group, "supergroup") }));
+    const g = msgOf(update(5012, { text: "/hoy", from: user(TG.sam), chat: groupChat(TG.group, "supergroup") }));
     expect(g).toMatchObject({ from: "tg222222222", replyTo: String(TG.group), text: "hoy" });
     expect(msgOf(update(5013, { text: "/hoy", chat: groupChat(-4000111, "group") }))?.replyTo).toBe("-4000111");
   });
@@ -81,10 +81,10 @@ describe("mapeo a InboundMessage", () => {
 describe("qué se ignora", () => {
   const reasons = (b: unknown) => one(b).stats.reasons;
   it.each([
-    ["edited_message", { update_id: 1, edited_message: { message_id: 1, from: user(TG.uziel), chat: privateChat(TG.uziel), date: 1, text: "x" } }],
+    ["edited_message", { update_id: 1, edited_message: { message_id: 1, from: user(TG.alex), chat: privateChat(TG.alex), date: 1, text: "x" } }],
     ["channel_post", { update_id: 2, channel_post: { message_id: 1, chat: { id: -1001, type: "channel" }, date: 1, text: "x" } }],
-    ["callback_query", { update_id: 3, callback_query: { id: "1", from: user(TG.uziel), data: "x" } }],
-    ["my_chat_member", { update_id: 4, my_chat_member: { chat: groupChat(), from: user(TG.uziel) } }],
+    ["callback_query", { update_id: 3, callback_query: { id: "1", from: user(TG.alex), data: "x" } }],
+    ["my_chat_member", { update_id: 4, my_chat_member: { chat: groupChat(), from: user(TG.alex) } }],
     ["solo update_id", { update_id: 5 }],
   ])("%s → ignorado (no-message)", (_n, body) => {
     const r = one(body);
@@ -234,7 +234,7 @@ describe("comandos de Telegram", () => {
 describe("modo grupo (TELEGRAM_ALLOWED_CHATS y mensajes dirigidos al bot)", () => {
   const BOTUSER = user(777000111, { is_bot: true, username: BOT });
   const grp = (id: number, text: string | undefined, over: Record<string, unknown> = {}, chat = TG.group) =>
-    update(id, { text, from: user(TG.uziel), chat: groupChat(chat), ...over });
+    update(id, { text, from: user(TG.alex), chat: groupChat(chat), ...over });
   const reasons = (body: unknown, bot: string | null = BOT, chats: string[] = CHATS) => one(body, bot, chats).stats.reasons;
   const textOf = (body: unknown, bot: string | null = BOT, chats: string[] = CHATS) => {
     const it = one(body, bot, chats).items[0];
@@ -284,7 +284,7 @@ describe("modo grupo (TELEGRAM_ALLOWED_CHATS y mensajes dirigidos al bot)", () =
     expect(textOf(grp(20, "amex", { reply_to_message: otro }), null)).toBe("amex"); // usuario desconocido: cualquier bot
   });
   it("responder a una PERSONA no cuenta; tampoco un reply malformado", () => {
-    expect(reasons(grp(21, "amex", { reply_to_message: { message_id: 1, from: user(TG.ana) } }))).toEqual({ "group-chatter": 1 });
+    expect(reasons(grp(21, "amex", { reply_to_message: { message_id: 1, from: user(TG.sam) } }))).toEqual({ "group-chatter": 1 });
     for (const bad of [null, "x", 5, { from: "x" }, { from: { id: -1, is_bot: true } }, {}]) {
       expect(reasons(grp(22, "amex", { reply_to_message: bad }))).toEqual({ "group-chatter": 1 });
     }

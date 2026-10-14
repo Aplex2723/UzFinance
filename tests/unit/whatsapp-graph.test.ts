@@ -43,14 +43,14 @@ const clean = (...texts: string[]) => {
     expect(s).not.toContain(WA.accessToken);
     expect(s).not.toContain("FIRMA-SECRETA");
     expect(s).not.toContain("lookaside");
-    expect(s).not.toContain(WA.uziel);
+    expect(s).not.toContain(WA.alex);
   }
 };
 
 describe("sendText", () => {
   it("envío correcto: URL, método, cabeceras y cuerpo exactos", async () => {
     const { f, calls } = fakeFetch(ok);
-    await mk(f).sendText(WA.uziel, "Hola *mundo*");
+    await mk(f).sendText(WA.alex, "Hola *mundo*");
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe(`https://graph.facebook.com/v23.0/${WA.phoneNumberId}/messages`);
     expect(calls[0].init.method).toBe("POST");
@@ -58,56 +58,56 @@ describe("sendText", () => {
     expect(h.Authorization).toBe(`Bearer ${WA.accessToken}`);
     expect(h["Content-Type"]).toBe("application/json");
     expect(JSON.parse(calls[0].init.body as string)).toEqual({
-      messaging_product: "whatsapp", recipient_type: "individual", to: WA.uziel, type: "text", text: { body: "Hola *mundo*", preview_url: false },
+      messaging_product: "whatsapp", recipient_type: "individual", to: WA.alex, type: "text", text: { body: "Hola *mundo*", preview_url: false },
     });
     expect(calls[0].init.signal).toBeDefined();
     expect(calls[0].init.redirect).toBe("error");
   });
   it("usa la versión configurada", async () => {
     const { f, calls } = fakeFetch(ok);
-    await mk(f, { version: "v24.0" }).sendText(WA.uziel, "x");
+    await mk(f, { version: "v24.0" }).sendText(WA.alex, "x");
     expect(calls[0].url).toContain("/v24.0/");
   });
   it("429 → un reintento y termina bien", async () => {
     const { f, calls } = fakeFetch(() => jsonRes({ error: { code: 130429, message: "texto con datos" } }, 429), ok);
-    await mk(f).sendText(WA.uziel, "hola");
+    await mk(f).sendText(WA.alex, "hola");
     expect(calls).toHaveLength(2);
     expect(logs.join("\n")).toContain("status=429 code=130429");
     clean();
   });
   it("5xx → un reintento; si vuelve a fallar se rinde (2 llamadas máximo) sin lanzar", async () => {
     const { f, calls } = fakeFetch(() => jsonRes({ error: { code: 2 } }, 503));
-    await expect(mk(f).sendText(WA.uziel, "hola")).resolves.toBeUndefined();
+    await expect(mk(f).sendText(WA.alex, "hola")).resolves.toBeUndefined();
     expect(calls).toHaveLength(2);
     clean();
   });
   it("4xx (token vencido, número no permitido) → NO se reintenta y no lanza", async () => {
-    const { f, calls } = fakeFetch(() => jsonRes({ error: { code: 190, message: `Token ${WA.accessToken} inválido`, error_data: { details: WA.uziel } } }, 401));
-    await expect(mk(f).sendText(WA.uziel, "hola")).resolves.toBeUndefined();
+    const { f, calls } = fakeFetch(() => jsonRes({ error: { code: 190, message: `Token ${WA.accessToken} inválido`, error_data: { details: WA.alex } } }, 401));
+    await expect(mk(f).sendText(WA.alex, "hola")).resolves.toBeUndefined();
     expect(calls).toHaveLength(1);
     expect(logs.join("\n")).toContain("status=401 code=190");
     clean(); // el cuerpo de error de Meta (que podría traer el token o el número) jamás se loguea
   });
   it("cuerpo de error que no es JSON → code=?", async () => {
     const { f } = fakeFetch(() => new Response("<html>caído</html>", { status: 500 }));
-    await mk(f).sendText(WA.uziel, "hola");
+    await mk(f).sendText(WA.alex, "hola");
     expect(logs.join("\n")).toContain("code=?");
   });
   it("tiempo agotado → no lanza, no reintenta, loguea sin detalles", async () => {
     const { f, calls } = fakeFetch(hang);
-    await expect(mk(f, { sendTimeoutMs: 20 }).sendText(WA.uziel, "hola")).resolves.toBeUndefined();
+    await expect(mk(f, { sendTimeoutMs: 20 }).sendText(WA.alex, "hola")).resolves.toBeUndefined();
     expect(calls).toHaveLength(1);
     expect(logs.join("\n")).toContain("tiempo agotado");
     clean();
   });
   it("error de red → no lanza", async () => {
     const f = (async () => { throw new TypeError(`fetch failed ${WA.accessToken}`); }) as typeof fetch;
-    await expect(mk(f).sendText(WA.uziel, "hola")).resolves.toBeUndefined();
+    await expect(mk(f).sendText(WA.alex, "hola")).resolves.toBeUndefined();
     clean();
   });
   it("trunca a 4096 caracteres sin partir un emoji", async () => {
     const { f, calls } = fakeFetch(ok);
-    await mk(f).sendText(WA.uziel, "a".repeat(10_000));
+    await mk(f).sendText(WA.alex, "a".repeat(10_000));
     const body = JSON.parse(calls[0].init.body as string).text.body as string;
     expect(body.length).toBe(MAX_SEND_CHARS);
     expect(body.endsWith("…")).toBe(true);
@@ -123,14 +123,14 @@ describe("sendText", () => {
     const io = mk(f);
     await io.sendText("../../etc", "hola");
     await io.sendText("", "hola");
-    await io.sendText(WA.uziel, "   ");
+    await io.sendText(WA.alex, "   ");
     expect(calls).toHaveLength(0);
   });
   it("respeta Retry-After (acotado) en 429", async () => {
     vi.useFakeTimers();
     try {
       const { f, calls } = fakeFetch(() => jsonRes({ error: { code: 4 } }, 429, { "retry-after": "1" }), ok);
-      const p = mk(f).sendText(WA.uziel, "hola");
+      const p = mk(f).sendText(WA.alex, "hola");
       await vi.advanceTimersByTimeAsync(1000);
       await p;
       expect(calls).toHaveLength(2);

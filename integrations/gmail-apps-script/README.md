@@ -26,8 +26,8 @@ Verificado en la documentación de Google (oct 2026):
 2. Pega `Code.gs` en el editor (reemplaza el contenido). Opcional: *Configuración del proyecto → Mostrar el archivo de manifiesto*
    y copia `appsscript.json`.
 3. **Propiedades del script** (ícono de engrane → *Propiedades de la secuencia de comandos* → *Agregar*):
-   - `UZ_URL` = `https://uzfinance-092d5.azurewebsites.net`
-   - `UZ_TOKEN` = el token del puente Gmail (se genera con `openssl rand -base64 36 | tr '+/' '-_'`; ver README principal).
+   - `UZ_URL` = `https://<tu-app>.azurewebsites.net`
+   - `UZ_TOKEN` = el token del puente Gmail (se genera con `openssl rand -base64 36 | tr '+/' '-_'`; ver [docs/BANAMEX-EMAIL.md](../../docs/BANAMEX-EMAIL.md)).
 
    El token **no va en el código**. Nunca lo pegues en un chat ni lo subas al repo.
 4. Selecciona `testConnection` → **Ejecutar**. Autoriza cuando lo pida.
@@ -86,7 +86,7 @@ Google puede cambiar estos límites sin aviso.
 
 - **Dejar de enviar:** ejecuta `removeTrigger()` (o borra el activador en *Activadores*).
 - **Revocar el acceso a tu Gmail:** <https://myaccount.google.com/permissions> → *UzFinance Gmail* → *Quitar acceso*.
-- **Revocar el token del puente:** quita su entrada de `EMAIL_INGEST_TOKENS` en la app (ver README principal); el script recibirá `401`.
+- **Revocar el token del puente:** quita su entrada de `EMAIL_INGEST_TOKENS` en la app (ver [docs/BANAMEX-EMAIL.md](../../docs/BANAMEX-EMAIL.md)); el script recibirá `401`.
 - Borrar el proyecto de script elimina todo lo anterior. Las etiquetas `uzfinance-*` pueden borrarse a mano en Gmail.
 
 ## Alternativa de menor permiso

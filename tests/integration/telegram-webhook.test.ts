@@ -139,11 +139,11 @@ describe("POST: el secreto es obligatorio y se comprueba primero", () => {
   it("el handler recibe mensaje, remitente autorizado, now = hora REAL de proceso (no la date del update) y appUrl", async () => {
     const t = harness();
     const before = Date.now();
-    await t.post(update(1002, { text: "350 starbucks", from: user(TG.ana), chat: privateChat(TG.ana), date: 1790000123 }));
+    await t.post(update(1002, { text: "350 starbucks", from: user(TG.sam), chat: privateChat(TG.sam), date: 1790000123 }));
     expect(t.handled).toHaveLength(1);
     const h = t.handled[0];
     expect(h.msg).toEqual({ id: "tg:1002", from: "tg222222222", replyTo: "222222222", timestamp: 1790000123, channel: "telegram", type: "text", text: "350 starbucks" });
-    expect(h.sender).toEqual({ waId: "tg222222222", name: "Ana" });
+    expect(h.sender).toEqual({ waId: "tg222222222", name: "Sam" });
     // La guarda de 48 h del handler depende de que `now` NO sea la hora del mensaje.
     expect(h.deps.now).toBeInstanceOf(Date);
     expect(h.deps.now!.getTime()).toBeGreaterThanOrEqual(before);
@@ -385,10 +385,10 @@ describe("remitentes y tipos de contenido", () => {
     expect((await rows()).map((r) => [r.msg_id, r.kind])).toEqual([["tg:4101", "document"], ["tg:4102", "image"], ["tg:4103", "audio"], ["tg:4104", "other"]]);
   });
   it.each([
-    ["edited_message", { update_id: 4201, edited_message: { message_id: 1, from: user(TG.uziel), chat: privateChat(TG.uziel), date: 1, text: "x" } }],
+    ["edited_message", { update_id: 4201, edited_message: { message_id: 1, from: user(TG.alex), chat: privateChat(TG.alex), date: 1, text: "x" } }],
     ["channel_post", { update_id: 4202, channel_post: { message_id: 1, chat: { id: -1009, type: "channel" }, date: 1, text: "x" } }],
-    ["callback_query", { update_id: 4203, callback_query: { id: "1", from: user(TG.uziel), data: "x" } }],
-    ["my_chat_member", { update_id: 4204, my_chat_member: { chat: groupChat(), from: user(TG.uziel) } }],
+    ["callback_query", { update_id: 4203, callback_query: { id: "1", from: user(TG.alex), data: "x" } }],
+    ["my_chat_member", { update_id: 4204, my_chat_member: { chat: groupChat(), from: user(TG.alex) } }],
     ["mensaje de un bot", update(4205, { text: "hola", from: user(777, { is_bot: true }) })],
     ["mensaje de canal", update(4206, { text: "hola", chat: { id: -1009, type: "channel" } })],
     ["sin from", update(4207, { text: "hola", from: undefined })],
@@ -464,10 +464,10 @@ describe("/id y modo descubrimiento", () => {
 describe("grupos", () => {
   it("el handler recibe replyTo = chat del grupo, el estado va por remitente y los errores se responden al grupo", async () => {
     const t = harness({}, GCFG);
-    await t.post(groupText(6001, "/hoy", TG.uziel));
-    await t.post(groupReply(6002, "120 oxxo", TG.ana));
+    await t.post(groupText(6001, "/hoy", TG.alex));
+    await t.post(groupReply(6002, "120 oxxo", TG.sam));
     expect(t.handled.map((h) => [h.msg.from, h.msg.replyTo, h.sender.name])).toEqual([
-      ["tg111111111", String(TG.group), "Uziel"], ["tg222222222", String(TG.group), "Ana"],
+      ["tg111111111", String(TG.group), "Alex"], ["tg222222222", String(TG.group), "Sam"],
     ]);
     expect((await rows()).map((r) => r.wa_id)).toEqual(["tg111111111", "tg222222222"]); // llave de estado por persona, no por grupo
     t.handle.mockRejectedValueOnce(new Error("x"));
@@ -492,7 +492,7 @@ describe("grupos", () => {
   });
   it("otro grupo que no es el permitido tampoco se atiende", async () => {
     const t = harness({}, GCFG);
-    await t.post(groupText(6120, "/resumen", TG.uziel, -1009999999));
+    await t.post(groupText(6120, "/resumen", TG.alex, -1009999999));
     expect(t.handle).not.toHaveBeenCalled();
     expect(t.sent).toEqual([]);
   });
@@ -747,10 +747,10 @@ describe("higiene de logs", () => {
     await t.post(textUpdate(8004, text), { secret: "intento-falso-inventado-0123456789abcdefgh" });
     await t.post("{no json " + text);
     t.handle.mockRejectedValueOnce(new Error("falla controlada"));
-    await t.post(update(8005, { text, from: user(TG.ana), chat: privateChat(TG.ana) }));
+    await t.post(update(8005, { text, from: user(TG.sam), chat: privateChat(TG.sam) }));
     const all = logs.join("\n");
     expect(all.length).toBeGreaterThan(0);
-    for (const secret of [text, "farmacia-inventada", String(TG.uziel), String(TG.ana), String(TG.intruso), TG.secret, TG.token, TG.token.split(":")[1], "Nombre Inventado", "Nombre Hostil", "Uziel", "Ana", "intento-falso"]) {
+    for (const secret of [text, "farmacia-inventada", String(TG.alex), String(TG.sam), String(TG.intruso), TG.secret, TG.token, TG.token.split(":")[1], "Nombre Inventado", "Nombre Hostil", "Alex", "Sam", "intento-falso"]) {
       expect(all).not.toContain(secret);
     }
   });

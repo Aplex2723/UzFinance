@@ -9,7 +9,7 @@ function prevMonthMX() {
 }
 
 test.describe("dashboard (captura de diseño)", () => {
-  test("muestra los 7 módulos con datos y captura de pantalla", async ({ page }, info) => {
+  test("muestra los 7 módulos con datos y captura de pantalla", async ({ page }) => {
     const errors: string[] = [];
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     page.on("pageerror", (e) => errors.push(String(e)));
@@ -40,7 +40,7 @@ test.describe("dashboard (captura de diseño)", () => {
     await expect(page.getByRole("img", { name: /Mapa de calor/ })).toBeVisible();
     await page.waitForTimeout(600); // animaciones/medidas de las gráficas
 
-    await page.screenshot({ path: `docs/screenshots/dashboard-${info.project.name}.png`, fullPage: true });
+    // Las capturas del README se generan con `npm run docs:screenshots`.
     expect(errors, errors.join("\n")).toEqual([]);
   });
 });

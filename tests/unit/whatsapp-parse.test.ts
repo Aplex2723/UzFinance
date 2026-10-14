@@ -28,8 +28,8 @@ const rej = (t: string, today = TODAY) => {
 
 describe("compras a meses sin intereses", () => {
   it.each([
-    ["3820 AMEX beatriz a 3 msi", 3820_00, 3, "Beatriz", [1]],
-    ["3820 amex beatriz 3 msi", 3820_00, 3, "Beatriz", [1]],
+    ["3820 AMEX marisol a 3 msi", 3820_00, 3, "Marisol", [1]],
+    ["3820 amex marisol 3 msi", 3820_00, 3, "Marisol", [1]],
     ["$12,000 amex iphone a 12 meses sin intereses", 12_000_00, 12, "Iphone", [1]],
     ["amex 1500 liverpool a 6 meses", 1500_00, 6, "Liverpool", [1]],
     ["5000 amex tele 12msi", 5000_00, 12, "Tele", [1]],
@@ -45,7 +45,7 @@ describe("compras a meses sin intereses", () => {
   });
 
   it("falta el monto: se conserva el número de meses y se pregunta el total", () => {
-    expect(exp("beatriz a 3 msi")).toMatchObject({ amountCents: null, installments: 3, amountNote: { kind: "installments" }, merchant: "Beatriz" });
+    expect(exp("marisol a 3 msi")).toMatchObject({ amountCents: null, installments: 3, amountNote: { kind: "installments" }, merchant: "Marisol" });
   });
 
   it("solo de 2 a 48 mensualidades y una sola cifra de meses", () => {

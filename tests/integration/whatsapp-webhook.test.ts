@@ -170,13 +170,13 @@ describe("POST: firma obligatoria", () => {
     expect(res.status).toBe(200);
     expect(events).toEqual(["claim", "handle", "200"]);
     expect(t.after).not.toHaveBeenCalled(); // no hizo falta after(): terminó dentro del presupuesto
-    expect(await rows()).toEqual([{ msg_id: "wamid.SIG1", wa_id: WA.uziel, kind: "text", status: "received" }]);
+    expect(await rows()).toEqual([{ msg_id: "wamid.SIG1", wa_id: WA.alex, kind: "text", status: "received" }]);
   });
   it("claim falso: el handler solo corre si claim devolvió true", async () => {
     const claim = vi.fn(async () => true);
     const t = harness({ claim });
     await t.post(body);
-    expect(claim).toHaveBeenCalledWith("wamid.SIG1", WA.uziel, "text");
+    expect(claim).toHaveBeenCalledWith("wamid.SIG1", WA.alex, "text");
     expect(t.handle).toHaveBeenCalledTimes(1);
     const t2 = harness({ claim: async () => false });
     await t2.post(body);
@@ -191,11 +191,11 @@ describe("POST: firma obligatoria", () => {
   it("el handler recibe el mensaje, el remitente autorizado, now = hora REAL de proceso (no la del mensaje) + appUrl", async () => {
     const t = harness();
     const before = Date.now();
-    await t.post(webhookBody([textMsg("wamid.CTX", "350 starbucks", WA.ana, 1790000123)]));
+    await t.post(webhookBody([textMsg("wamid.CTX", "350 starbucks", WA.sam, 1790000123)]));
     expect(t.handled).toHaveLength(1);
     const h = t.handled[0];
-    expect(h.msg).toEqual({ id: "wamid.CTX", from: WA.ana, timestamp: 1790000123, type: "text", text: "350 starbucks" });
-    expect(h.sender).toEqual({ waId: WA.ana, name: "Ana" });
+    expect(h.msg).toEqual({ id: "wamid.CTX", from: WA.sam, timestamp: 1790000123, type: "text", text: "350 starbucks" });
+    expect(h.sender).toEqual({ waId: WA.sam, name: "Sam" });
     // La guarda de 48 h del handler depende de que `now` NO sea la hora del mensaje.
     expect(h.deps.now).toBeInstanceOf(Date);
     expect(h.deps.now!.getTime()).toBeGreaterThanOrEqual(before);
@@ -207,7 +207,7 @@ describe("POST: firma obligatoria", () => {
   it("con el handler REAL, un mensaje de hace más de 48 h se rechaza (la guarda de 48 h funciona porque `now` es la hora real)", async () => {
     const t = harness({ handle: handleInbound });
     const old = Math.floor(Date.now() / 1000) - 3 * 24 * 3600;
-    const res = await t.post(webhookBody([textMsg("wamid.OLD", "350 starbucks", WA.uziel, old)]));
+    const res = await t.post(webhookBody([textMsg("wamid.OLD", "350 starbucks", WA.alex, old)]));
     expect(res.status).toBe(200);
     expect(t.sent).toHaveLength(1);
     expect(t.sent[0].body).toBe(TOO_OLD);
@@ -308,20 +308,20 @@ describe("POST: remitentes y tipos de contenido", () => {
   });
   it("mezcla de autorizado y no autorizado: solo se procesa el autorizado, en orden", async () => {
     const t = harness();
-    await t.post(webhookBody([textMsg("wamid.M1", "uno"), textMsg("wamid.M2", "intruso", WA.intruso), textMsg("wamid.M3", "tres", WA.ana)]));
+    await t.post(webhookBody([textMsg("wamid.M1", "uno"), textMsg("wamid.M2", "intruso", WA.intruso), textMsg("wamid.M3", "tres", WA.sam)]));
     await t.flush();
     expect(t.handled.map((h) => h.msg.id)).toEqual(["wamid.M1", "wamid.M3"]);
     expect(t.sent).toEqual([]);
   });
   it("521… de Meta coincide con una lista configurada con 52…", async () => {
-    const t = harness({}, getWhatsAppConfig({ ...WA_ENV, WHATSAPP_ALLOWED: "525511110001=Uziel" }));
-    await t.post(webhookBody([textMsg("wamid.MX", "hola", WA.uziel)]));
+    const t = harness({}, getWhatsAppConfig({ ...WA_ENV, WHATSAPP_ALLOWED: "525511110001=Alex" }));
+    await t.post(webhookBody([textMsg("wamid.MX", "hola", WA.alex)]));
     await t.flush();
     expect(t.handled).toHaveLength(1);
-    expect(t.handled[0].sender).toEqual({ waId: WA.uziel, name: "Uziel" });
+    expect(t.handled[0].sender).toEqual({ waId: WA.alex, name: "Alex" });
   });
   it("misma terminación de 10 dígitos con otra lada de país NO es el remitente autorizado (sin suplantación)", async () => {
-    const t = harness({}, getWhatsAppConfig({ ...WA_ENV, WHATSAPP_ALLOWED: "525511110001=Uziel" }));
+    const t = harness({}, getWhatsAppConfig({ ...WA_ENV, WHATSAPP_ALLOWED: "525511110001=Alex" }));
     const res = await t.post(webhookBody([textMsg("wamid.SPOOF", "hola", "15511110001")]));
     expect(res.status).toBe(200);
     expect(t.handle).not.toHaveBeenCalled();
@@ -337,7 +337,7 @@ describe("POST: remitentes y tipos de contenido", () => {
   });
   it("solo `statuses` (acuses) → 200 y nada se programa", async () => {
     const t = harness();
-    const res = await t.post(webhookBody([], { statuses: [{ id: "wamid.OUT", status: "delivered", recipient_id: WA.uziel }] }));
+    const res = await t.post(webhookBody([], { statuses: [{ id: "wamid.OUT", status: "delivered", recipient_id: WA.alex }] }));
     expect(res.status).toBe(200);
     expect(t.after).not.toHaveBeenCalled();
     expect(await rows()).toEqual([]);
@@ -345,10 +345,10 @@ describe("POST: remitentes y tipos de contenido", () => {
   it("documento, imagen, audio y otros tipos llegan al handler con su tipo y se registran con su kind", async () => {
     const t = harness();
     await t.post(webhookBody([
-      { from: WA.uziel, id: "wamid.DOC", timestamp: "1790000001", type: "document", document: { id: "70001", mime_type: "application/pdf", filename: "estado.pdf" } },
-      { from: WA.uziel, id: "wamid.IMG", timestamp: "1790000002", type: "image", image: { id: "70002", mime_type: "image/jpeg" } },
-      { from: WA.uziel, id: "wamid.AUD", timestamp: "1790000003", type: "audio", audio: { id: "70003", mime_type: "audio/ogg" } },
-      { from: WA.uziel, id: "wamid.REA", timestamp: "1790000004", type: "reaction", reaction: { emoji: "👍", message_id: "wamid.X" } },
+      { from: WA.alex, id: "wamid.DOC", timestamp: "1790000001", type: "document", document: { id: "70001", mime_type: "application/pdf", filename: "estado.pdf" } },
+      { from: WA.alex, id: "wamid.IMG", timestamp: "1790000002", type: "image", image: { id: "70002", mime_type: "image/jpeg" } },
+      { from: WA.alex, id: "wamid.AUD", timestamp: "1790000003", type: "audio", audio: { id: "70003", mime_type: "audio/ogg" } },
+      { from: WA.alex, id: "wamid.REA", timestamp: "1790000004", type: "reaction", reaction: { emoji: "👍", message_id: "wamid.X" } },
     ]));
     await t.flush();
     expect(t.handled.map((h) => [h.msg.id, h.msg.type, h.msg.media?.id])).toEqual([
@@ -390,11 +390,11 @@ describe("POST: idempotencia y errores", () => {
     const res = await t.post(webhookBody([textMsg("wamid.BOOM", "350 starbucks"), textMsg("wamid.OK2", "hoy")]));
     expect(res.status).toBe(200);
     await t.flush();
-    expect(t.sent).toEqual([{ to: WA.uziel, body: GENERIC_ERROR }]);
+    expect(t.sent).toEqual([{ to: WA.alex, body: GENERIC_ERROR }]);
     expect(t.sent[0].body).not.toContain("starbucks");
     expect(await rows()).toEqual([
-      { msg_id: "wamid.BOOM", wa_id: WA.uziel, kind: "text", status: "failed" },
-      { msg_id: "wamid.OK2", wa_id: WA.uziel, kind: "text", status: "received" },
+      { msg_id: "wamid.BOOM", wa_id: WA.alex, kind: "text", status: "failed" },
+      { msg_id: "wamid.OK2", wa_id: WA.alex, kind: "text", status: "received" },
     ]);
     expect(t.handled.map((h) => h.msg.id)).toEqual(["wamid.OK2"]);
     // Reintento de Meta del mensaje fallido: no se reprocesa (ya está reclamado).
@@ -407,7 +407,7 @@ describe("POST: idempotencia y errores", () => {
     t.handle.mockRejectedValueOnce(new Error("x"));
     await t.post(webhookBody([textMsg("wamid.F1", "a")]));
     await t.flush();
-    expect(t.sent).toEqual([{ to: WA.uziel, body: GENERIC_ERROR }]);
+    expect(t.sent).toEqual([{ to: WA.alex, body: GENERIC_ERROR }]);
   });
   it("si no se puede registrar el mensaje (base caída) → avisa al usuario que reenvíe; no revienta ni procesa", async () => {
     const t = harness({ claim: async () => { throw new Error("Failed to connect"); } });
@@ -415,7 +415,7 @@ describe("POST: idempotencia y errores", () => {
     expect(res.status).toBe(200);
     await t.flush();
     expect(t.handle).not.toHaveBeenCalled();
-    expect(t.sent).toEqual([{ to: WA.uziel, body: BUSY_ERROR }]); // el intruso no recibe nada
+    expect(t.sent).toEqual([{ to: WA.alex, body: BUSY_ERROR }]); // el intruso no recibe nada
   });
   it("varios mensajes en un POST se procesan en SERIE y en orden", async () => {
     const t = harness();
@@ -501,7 +501,7 @@ describe("POST: presupuesto de tiempo y after()", () => {
     await t.post(webhookBody([textMsg("wamid.B6", "a")]));
     g.release();
     await expect(t.flush()).resolves.toBeUndefined();
-    expect(t.sent).toEqual([{ to: WA.uziel, body: GENERIC_ERROR }]);
+    expect(t.sent).toEqual([{ to: WA.alex, body: GENERIC_ERROR }]);
   });
   it("un fallo del handler dentro del presupuesto tampoco rompe la respuesta", async () => {
     const t = harness();
@@ -533,7 +533,7 @@ describe("POST: mensaje en vuelo (reintento de Meta dentro de la ventana de 120 
 
   it("fila `received` RECIENTE (el proceso murió a media ejecución) → 503 con Retry-After: 5, sin procesar ni responder al usuario", async () => {
     const t = harness();
-    await claimMessage("wamid.INF", WA.uziel, "text"); // el primer intento lo reclamó y murió sin cerrar
+    await claimMessage("wamid.INF", WA.alex, "text"); // el primer intento lo reclamó y murió sin cerrar
     const res = await t.post(body());
     expect(res.status).toBe(503);
     expect(res.headers.get("retry-after")).toBe("5");
@@ -544,7 +544,7 @@ describe("POST: mensaje en vuelo (reintento de Meta dentro de la ventana de 120 
   });
   it("el reintento que llega DESPUÉS de la ventana (stale) sí se procesa → 200; el siguiente ya es duplicado", async () => {
     const t = harness();
-    await claimMessage("wamid.INF", WA.uziel, "text");
+    await claimMessage("wamid.INF", WA.alex, "text");
     expect((await t.post(body())).status).toBe(503);
     await query("UPDATE dbo.whatsapp_messages SET created_at = DATEADD(SECOND, -121, SYSUTCDATETIME()) WHERE msg_id = 'wamid.INF'");
     t.handle.mockImplementation(async (msg) => void (await finishMessage(msg.id, "done")));
@@ -556,7 +556,7 @@ describe("POST: mensaje en vuelo (reintento de Meta dentro de la ventana de 120 
   });
   it.each(["done", "failed", "ignored"] as const)("fila '%s' → 200 duplicado sin procesar", async (status) => {
     const t = harness();
-    await claimMessage("wamid.INF", WA.uziel, "text");
+    await claimMessage("wamid.INF", WA.alex, "text");
     await finishMessage("wamid.INF", status);
     const res = await t.post(body());
     expect(res.status).toBe(200);
@@ -565,7 +565,7 @@ describe("POST: mensaje en vuelo (reintento de Meta dentro de la ventana de 120 
   });
   it("carrera de dos reintentos simultáneos sobre una fila vencida: uno procesa (200), el otro 503", async () => {
     const t = harness();
-    await claimMessage("wamid.INF", WA.uziel, "text");
+    await claimMessage("wamid.INF", WA.alex, "text");
     await query("UPDATE dbo.whatsapp_messages SET created_at = DATEADD(MINUTE, -3, SYSUTCDATETIME()) WHERE msg_id = 'wamid.INF'");
     t.handle.mockImplementation(() => new Promise<void>((r) => setTimeout(r, 50)));
     const res = await Promise.all([t.post(body()), t.post(body())]);
@@ -580,15 +580,15 @@ describe("POST: mensaje en vuelo (reintento de Meta dentro de la ventana de 120 
     expect(t.handle).toHaveBeenCalledTimes(1);
   });
   it("claimMessageState: new → inflight (reciente) → stale (vencida) → inflight (renovada) → done; claimMessage es su versión booleana", async () => {
-    expect(await claimMessageState("wamid.ST", WA.uziel, "text")).toBe("new");
-    expect(await claimMessageState("wamid.ST", WA.uziel, "text")).toBe("inflight");
+    expect(await claimMessageState("wamid.ST", WA.alex, "text")).toBe("new");
+    expect(await claimMessageState("wamid.ST", WA.alex, "text")).toBe("inflight");
     await query("UPDATE dbo.whatsapp_messages SET created_at = DATEADD(MINUTE, -3, SYSUTCDATETIME()) WHERE msg_id = 'wamid.ST'");
-    expect(await claimMessageState("wamid.ST", WA.uziel, "text")).toBe("stale");
-    expect(await claimMessageState("wamid.ST", WA.uziel, "text")).toBe("inflight"); // la reclamó el anterior y renovó created_at
+    expect(await claimMessageState("wamid.ST", WA.alex, "text")).toBe("stale");
+    expect(await claimMessageState("wamid.ST", WA.alex, "text")).toBe("inflight"); // la reclamó el anterior y renovó created_at
     await finishMessage("wamid.ST", "done");
-    expect(await claimMessageState("wamid.ST", WA.uziel, "text")).toBe("done");
-    expect(await claimMessage("wamid.ST2", WA.uziel, "text")).toBe(true);
-    expect(await claimMessage("wamid.ST2", WA.uziel, "text")).toBe(false);
+    expect(await claimMessageState("wamid.ST", WA.alex, "text")).toBe("done");
+    expect(await claimMessage("wamid.ST2", WA.alex, "text")).toBe(true);
+    expect(await claimMessage("wamid.ST2", WA.alex, "text")).toBe(false);
   });
   it("con claim falso 'inflight': 503; con 'done': 200; con 'new'/'stale': se procesa", async () => {
     for (const [state, status, handled] of [["inflight", 503, 0], ["done", 200, 0], ["new", 200, 1], ["stale", 200, 1]] as const) {
@@ -717,12 +717,12 @@ describe("higiene de logs", () => {
     await t.post(null, { raw, sign: false, headers: { "x-hub-signature-256": "sha256=" + "e".repeat(64) } });
     await t.post("{no json " + text);
     t.handle.mockRejectedValueOnce(new Error("falla controlada"));
-    await t.post(webhookBody([textMsg("wamid.LOG3", text, WA.ana)]));
+    await t.post(webhookBody([textMsg("wamid.LOG3", text, WA.sam)]));
     await t.flush();
     await t.get(verifyParams({ "hub.verify_token": "intento-falso-inventado-0123" }));
     const all = logs.join("\n");
     expect(all.length).toBeGreaterThan(0);
-    for (const secret of [text, "farmacia-inventada", WA.uziel, WA.ana, WA.intruso, WA.verifyToken, WA.appSecret, WA.accessToken, "Nombre Inventado", "Uziel", "e".repeat(64), "intento-falso"]) {
+    for (const secret of [text, "farmacia-inventada", WA.alex, WA.sam, WA.intruso, WA.verifyToken, WA.appSecret, WA.accessToken, "Nombre Inventado", "Alex", "e".repeat(64), "intento-falso"]) {
       expect(all).not.toContain(secret);
     }
   });

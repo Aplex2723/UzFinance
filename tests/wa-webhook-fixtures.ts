@@ -6,9 +6,9 @@ export const WA = {
   appSecret: "app-secret-inventado-0123456789abcdef",
   accessToken: "EAAT-token-de-acceso-inventado-0123456789",
   phoneNumberId: "100200300400500",
-  allowed: "5215511110001=Uziel,5215522220002=Ana",
-  uziel: "5215511110001", // Meta lo manda con el 1 de móviles de México
-  ana: "5215522220002",
+  allowed: "5215511110001=Alex,5215522220002=Sam",
+  alex: "5215511110001", // Meta lo manda con el 1 de móviles de México
+  sam: "5215522220002",
   intruso: "5215599990009",
 };
 
@@ -35,7 +35,7 @@ export function webhookBody(messages: Msg[], over: { phoneNumberId?: string; sta
             value: {
               messaging_product: "whatsapp",
               metadata: { display_phone_number: "15550001111", phone_number_id: over.phoneNumberId ?? WA.phoneNumberId },
-              contacts: [{ profile: { name: "Nombre Inventado" }, wa_id: WA.uziel }],
+              contacts: [{ profile: { name: "Nombre Inventado" }, wa_id: WA.alex }],
               ...(messages.length ? { messages } : {}),
               ...(over.statuses ? { statuses: over.statuses } : {}),
             },
@@ -46,5 +46,5 @@ export function webhookBody(messages: Msg[], over: { phoneNumberId?: string; sta
   };
 }
 
-export const textMsg = (id: string, body: string, from = WA.uziel, ts: number | string = "1790000000"): Msg => ({ from, id, timestamp: String(ts), type: "text", text: { body } });
+export const textMsg = (id: string, body: string, from = WA.alex, ts: number | string = "1790000000"): Msg => ({ from, id, timestamp: String(ts), type: "text", text: { body } });
 export const signed = (raw: string, secret = WA.appSecret) => ({ "x-hub-signature-256": signBody(secret, raw) });

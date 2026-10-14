@@ -8,13 +8,13 @@ const env = () => getEnv({ ...process.env });
 
 describe("normalizeEmail", () => {
   it("convierte UPN de invitado externo (#EXT#)", () => {
-    expect(normalizeEmail("uziel.francotorres_gmail.com#EXT#@contoso.onmicrosoft.com")).toBe(ALLOWED);
+    expect(normalizeEmail("owner_example.com#EXT#@contoso.onmicrosoft.com")).toBe(ALLOWED);
   });
   it("respeta guiones bajos en la parte local (usa el último)", () => {
-    expect(normalizeEmail("uziel_franco_gmail.com#EXT#@t.onmicrosoft.com")).toBe("uziel_franco@gmail.com");
+    expect(normalizeEmail("alex_demo_gmail.com#EXT#@t.onmicrosoft.com")).toBe("alex_demo@gmail.com");
   });
   it("es insensible a mayúsculas y espacios", () => {
-    expect(normalizeEmail("  Uziel.FrancoTorres@Gmail.com ")).toBe(ALLOWED);
+    expect(normalizeEmail("  Owner@Example.com ")).toBe(ALLOWED);
   });
   it("rechaza basura", () => {
     for (const bad of ["", "sin-arroba", "a@b", "x#EXT#@t", "_#EXT#@t.com"]) expect(normalizeEmail(bad)).toBeNull();
@@ -38,7 +38,7 @@ describe("parseClientPrincipal", () => {
 describe("isAllowedPrincipal", () => {
   const opts = { allowedEmail: ALLOWED };
   it("acepta invitado Gmail por UPN aunque no venga claim email", () => {
-    const p = parseClientPrincipal(principalHeader([{ typ: "preferred_username", val: "uziel.francotorres_gmail.com#EXT#@c.onmicrosoft.com" }]))!;
+    const p = parseClientPrincipal(principalHeader([{ typ: "preferred_username", val: "owner_example.com#EXT#@c.onmicrosoft.com" }]))!;
     expect(isAllowedPrincipal(p, opts).allowed).toBe(true);
   });
   it("acepta por claim email normal", () => {
@@ -46,7 +46,7 @@ describe("isAllowedPrincipal", () => {
     expect(isAllowedPrincipal(p, opts).allowed).toBe(true);
   });
   it("rechaza otro usuario y subcadenas parecidas", () => {
-    for (const v of ["mallory_gmail.com#EXT#@c.onmicrosoft.com", "xuziel.francotorres@gmail.com", "uziel.francotorres@gmail.com.evil.com"]) {
+    for (const v of ["mallory_gmail.com#EXT#@c.onmicrosoft.com", "xowner@example.com", "owner@example.com.evil.com"]) {
       const p = parseClientPrincipal(principalHeader([{ typ: "email", val: v }, { typ: "preferred_username", val: v }]))!;
       expect(isAllowedPrincipal(p, opts).allowed).toBe(false);
     }

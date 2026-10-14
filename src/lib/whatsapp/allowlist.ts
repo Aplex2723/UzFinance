@@ -14,7 +14,7 @@ export function normalizeNumber(n: string): string {
 }
 
 /**
- * "5215512345678=Uziel,5215587654321=Ana" → [{waId, name}]. `null` si algo es inválido (falla cerrado: una lista a medias
+ * "5215512345678=Alex,5215587654321=Sam" → [{waId, name}]. `null` si algo es inválido (falla cerrado: una lista a medias
  * podría autorizar de más o de menos). Acepta espacios y un "+" inicial; número CON lada de país (11 a 15 dígitos, sin 0 inicial: un
  * número de 10 dígitos sin lada es ambiguo y se rechaza); 1 a 5 personas sin repetir número (ni con y sin el "1" de México).
  */

@@ -52,5 +52,5 @@ jobs:
       - run: npm run build
       - name: Verificar que el paquete trae el OCR
         run: node scripts/check-standalone.mjs
-      # Los e2e (Playwright) ya no corren aquí: tardaban demasiado para un proyecto personal.
-      # Siguen disponibles en local: `npm run test:e2e`.
+      # Los e2e (Playwright) no corren aquí para mantener el pipeline rápido.
+      # Corren en local: `npm run test:e2e`.
