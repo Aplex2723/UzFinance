@@ -41,31 +41,6 @@ test.describe("meses sin intereses", () => {
   });
 });
 
-test.describe("comercios por categorizar", () => {
-  test("lista los comercios sin categoría con su total", async ({ page }, info) => {
-    test.skip(info.project.name !== "desktop", "la prueba de celular los categoriza");
-    await page.goto("/");
-    const rows = page.getByTestId("pending-merchant");
-    await expect(page.getByTestId("pending-merchants")).toBeVisible();
-    await expect(rows.filter({ hasText: "TIENDITA DEL BARRIO DEMO" })).toContainText("2 movimientos");
-    await expect(rows.filter({ hasText: "PUESTO RARO DEMO" })).toContainText("1 movimiento");
-  });
-
-  test("elegir la categoría la aplica a TODOS los movimientos de ese comercio y lo quita de la lista", async ({ page }, info) => {
-    test.skip(info.project.name !== "mobile", "una sola vez: cambia datos");
-    await page.goto("/");
-    const row = page.getByTestId("pending-merchant").filter({ hasText: "TIENDITA DEL BARRIO DEMO" });
-    await row.getByRole("combobox").selectOption({ label: "Supermercado" });
-    await expect(page.getByTestId("pending-merchant").filter({ hasText: "TIENDITA DEL BARRIO DEMO" })).toHaveCount(0);
-    await page.goto("/transacciones?q=TIENDITA");
-    const items = page.getByRole("listitem").filter({ hasText: "TIENDITA DEL BARRIO DEMO" });
-    await expect(items).toHaveCount(2);
-    for (const i of await items.all()) await expect(i).not.toContainText("IA ");
-    await page.goto("/transacciones?q=TIENDITA&category=none");
-    await expect(page.getByText("TIENDITA DEL BARRIO DEMO")).toHaveCount(0);
-  });
-});
-
 test.describe("categorías y descripciones", () => {
   test("cada categoría muestra su descripción editable (criterio de la IA) y se guarda", async ({ page }, info) => {
     test.skip(info.project.name !== "desktop", "una sola vez: cambia datos");
@@ -158,7 +133,6 @@ test.describe("metas de ahorro", () => {
     await page.waitForLoadState("networkidle");
     const top = async (sel: string) => (await page.locator(sel).first().boundingBox())!.y;
     expect(await top('[data-testid="goal-panel"]')).toBeLessThan(await top('section[aria-label="Tarjetas"]'));
-    await expect(page.getByTestId("month-recap-generate")).toBeVisible(); // análisis del mes con IA
     if (info.project.name === "mobile") {
       for (const path of ["/", "/metas"]) {
         await page.goto(path);

@@ -5,15 +5,9 @@ import { SankeyChart } from "@/components/charts/SankeyChart";
 import { WeekdayBars } from "@/components/charts/WeekdayBars";
 import { CardWallet } from "@/components/CardWallet";
 import { DashboardActions } from "@/components/DashboardActions";
-import { InsightList } from "@/components/insights/InsightList";
 import { KpiTile } from "@/components/insights/Kpi";
 import { GoalsOverviewPanel } from "@/components/goals/GoalsOverviewPanel";
-import { RecapPanel } from "@/components/goals/RecapPanel";
-import { monthRecapHash } from "@/lib/month-recap";
-import { getEnv } from "@/lib/env";
-import { getMonthRecap } from "@/lib/repo/month-recap";
 import { MsiPanel } from "@/components/insights/MsiPanel";
-import { PendingMerchants } from "@/components/PendingMerchants";
 import { PaceBar } from "@/components/insights/PaceBar";
 import { MonthNav } from "@/components/MonthNav";
 import { RecentActivity } from "@/components/RecentActivity";
@@ -28,9 +22,8 @@ import { getInsights } from "@/lib/repo/insights";
 import { ISSUER_LABEL, monthLabel } from "@/lib/format";
 import { formatMXN } from "@/lib/money";
 import { getCardSummaries, getCumulative, getHeatmap, getOverview, getSankey, getWeekdayTotals } from "@/lib/repo/stats";
-import { listCategories } from "@/lib/repo/categories";
 import { getGoalsOverview } from "@/lib/repo/goals-plan";
-import { listTransactions, listUncategorizedMerchants } from "@/lib/repo/transactions";
+import { listTransactions } from "@/lib/repo/transactions";
 import { currentMonth, MONTH_RE, prevMonth } from "@/lib/time";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
@@ -39,7 +32,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const raw = typeof sp.month === "string" ? sp.month : undefined;
   const month = raw && MONTH_RE.test(raw) ? raw : currentMonth();
 
-  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins, msi, pendingMerchants, categories, goals, monthRecap] = await Promise.all([
+  const [overview, cards, cumulative, weekday, recent, sankey, heat, allCards, unparsed, payments, ins, msi, goals] = await Promise.all([
     getOverview(month),
     getCardSummaries(month),
     getCumulative(month),
@@ -52,10 +45,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     listTransactions({ kind: "card_payment", month, limit: 20 }),
     getInsights(month),
     getMsi(),
-    listUncategorizedMerchants(8),
-    listCategories(),
     getGoalsOverview(),
-    getMonthRecap(month),
   ]);
   const paymentsTotal = payments.rows.reduce((a, r) => a + r.amount_cents, 0);
 
@@ -82,6 +72,23 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </p>
         <DashboardActions />
       </section>
+
+      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <Panel title="Gasto acumulado: este mes vs. anterior">
+          <CumulativeChart points={cumulative.points} cutoff={cumulative.cutoff} curLabel={monthLabel(month, true)} prevLabel={monthLabel(prevMonth(month), true)} />
+        </Panel>
+        <Panel title="Gasto por día de la semana">
+          <WeekdayBars totals={weekday} />
+        </Panel>
+      </div>
+
+      <Panel title="Flujo: tarjeta → categoría">
+        <SankeyChart data={sankey} />
+      </Panel>
+
+      <Panel title="Intensidad de gasto diario">
+        <Heatmap cells={heat.cells} weeks={heat.weeks} />
+      </Panel>
 
       <PaceBar i={ins} />
 
@@ -113,50 +120,16 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         />
       </section>
 
-      <GoalsOverviewPanel o={goals} />
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <GoalsOverviewPanel o={goals} />
+        <MsiPanel s={msi} />
+      </div>
 
       <CardWallet cards={cards.map((c) => ({ id: c.id, name: c.name, issuer: c.issuer, last4: c.last4, color: c.color, art: allCards.find((x) => x.id === c.id)?.art ?? null, cents: c.cents, prevCents: c.prevCents, deltaPct: c.deltaPct, spark: c.spark }))} />
 
-      <Panel title="Insights del mes" action={<Link href={`/analitica${month === currentMonth() ? "" : `?month=${month}`}`} className="btn !h-7 !px-2.5 text-[11px]">Ver análisis</Link>}>
-        <InsightList messages={ins.messages.slice(0, 4)} />
+      <Panel title="Actividad reciente" action={<Link href="/actividad" className="btn !h-7 !px-2.5 text-[11px]">Ver todo</Link>}>
+        <RecentActivity rows={recent.rows} />
       </Panel>
-
-      <RecapPanel
-        title={`Análisis de ${monthLabel(month)} con IA`}
-        endpoint="/api/insights/recap"
-        payload={{ month }}
-        recap={monthRecap ? { text: monthRecap.text, at: monthRecap.at, model: monthRecap.model } : null}
-        stale={!!monthRecap && monthRecap.hash !== monthRecapHash(ins)}
-        configured={!!getEnv().OPENROUTER_API_KEY}
-        blockedReason={ins.count === 0 ? "Aún no hay gastos en este mes para analizar." : null}
-        idleText="Un análisis en palabras de cómo va el mes: ritmo, categorías que más pesan, comparación con el mes anterior y qué conviene hacer."
-        testId="month-recap"
-      />
-
-      <MsiPanel s={msi} />
-
-      <PendingMerchants merchants={pendingMerchants} categories={categories} />
-
-      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <Panel title="Gasto acumulado: este mes vs. anterior">
-          <CumulativeChart points={cumulative.points} cutoff={cumulative.cutoff} curLabel={monthLabel(month, true)} prevLabel={monthLabel(prevMonth(month), true)} />
-        </Panel>
-        <Panel title="Gasto por día de la semana">
-          <WeekdayBars totals={weekday} />
-        </Panel>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr] xl:grid-cols-[0.95fr_1.5fr_0.85fr]">
-        <Panel title="Actividad reciente" action={<Link href="/actividad" className="btn !h-7 !px-2.5 text-[11px]">Ver todo</Link>}>
-          <RecentActivity rows={recent.rows} />
-        </Panel>
-        <Panel title="Flujo: tarjeta → categoría">
-          <SankeyChart data={sankey} />
-        </Panel>
-        <Panel title="Intensidad de gasto diario" className="lg:col-span-2 xl:col-span-1">
-          <Heatmap cells={heat.cells} weeks={heat.weeks} />
-        </Panel>
-      </div>
 
       {payments.rows.length > 0 && (
         <Panel
