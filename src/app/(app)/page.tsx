@@ -73,23 +73,6 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <DashboardActions />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <Panel title="Gasto acumulado: este mes vs. anterior">
-          <CumulativeChart points={cumulative.points} cutoff={cumulative.cutoff} curLabel={monthLabel(month, true)} prevLabel={monthLabel(prevMonth(month), true)} />
-        </Panel>
-        <Panel title="Gasto por día de la semana">
-          <WeekdayBars totals={weekday} />
-        </Panel>
-      </div>
-
-      <Panel title="Flujo: tarjeta → categoría">
-        <SankeyChart data={sankey} />
-      </Panel>
-
-      <Panel title="Intensidad de gasto diario">
-        <Heatmap cells={heat.cells} weeks={heat.weeks} />
-      </Panel>
-
       <PaceBar i={ins} />
 
       <section aria-label="Cifras clave" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -120,16 +103,35 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         />
       </section>
 
+      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <Panel title="Gasto acumulado: este mes vs. anterior">
+          <CumulativeChart points={cumulative.points} cutoff={cumulative.cutoff} curLabel={monthLabel(month, true)} prevLabel={monthLabel(prevMonth(month), true)} />
+        </Panel>
+        <Panel title="Gasto por día de la semana">
+          <WeekdayBars totals={weekday} />
+        </Panel>
+      </div>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Panel title="Flujo: tarjeta → categoría">
+          <SankeyChart data={sankey} />
+        </Panel>
+        <Panel title="Intensidad de gasto diario">
+          <Heatmap cells={heat.cells} weeks={heat.weeks} />
+        </Panel>
+      </div>
+
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <GoalsOverviewPanel o={goals} />
-        <MsiPanel s={msi} />
+        <div className="flex flex-col gap-4">
+          <MsiPanel s={msi} />
+          <Panel title="Actividad reciente" action={<Link href="/actividad" className="btn !h-7 !px-2.5 text-[11px]">Ver todo</Link>}>
+            <RecentActivity rows={recent.rows} />
+          </Panel>
+        </div>
       </div>
 
       <CardWallet cards={cards.map((c) => ({ id: c.id, name: c.name, issuer: c.issuer, last4: c.last4, color: c.color, art: allCards.find((x) => x.id === c.id)?.art ?? null, cents: c.cents, prevCents: c.prevCents, deltaPct: c.deltaPct, spark: c.spark }))} />
-
-      <Panel title="Actividad reciente" action={<Link href="/actividad" className="btn !h-7 !px-2.5 text-[11px]">Ver todo</Link>}>
-        <RecentActivity rows={recent.rows} />
-      </Panel>
 
       {payments.rows.length > 0 && (
         <Panel

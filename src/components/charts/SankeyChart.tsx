@@ -7,7 +7,7 @@ type In = { card: string; category: string; color: string; cents: number };
 type N = { id: string; name: string; color: string; side: "card" | "cat" };
 type L = { source: string; target: string; value: number; color: string };
 
-const W = 760, MAX_CATS = 8, ROW = 30, OTHERS = "Otras categorías";
+const W = 680, MAX_CATS = 8, ROW = 30, OTHERS = "Otras categorías";
 
 /** Deja las categorías más pesadas y junta el resto en una sola: con 25+ nodos el diagrama es ilegible. */
 function groupSmall(data: In[]): In[] {
@@ -43,7 +43,7 @@ export function SankeyChart({ data }: { data: In[] }) {
       .nodeAlign(sankeyJustify)
       .nodeWidth(10)
       .nodePadding(14)
-      .extent([[170, 6], [W - 170, height - 6]]);
+      .extent([[175, 6], [W - 150, height - 6]]);
     return { height, ...layout({ nodes: [...nodes.values()].map((n) => ({ ...n })), links: links.map((l) => ({ ...l })) }) };
   }, [data]);
 
@@ -91,10 +91,10 @@ export function SankeyChart({ data }: { data: In[] }) {
               y={((n.y0 ?? 0) + (n.y1 ?? 0)) / 2}
               textAnchor={n.side === "card" ? "end" : "start"}
               dominantBaseline="middle"
-              fontSize="11"
+              fontSize="10"
               fill="#d4d4d8"
             >
-              {n.name.length > 24 ? `${n.name.slice(0, 23)}…` : n.name}
+              {n.name.length > 23 ? `${n.name.slice(0, 22)}…` : n.name}
               <tspan fill="#8b8b92" fontSize="9">{` · ${formatMXN((n.value ?? 0) * 100, { compact: true })}`}</tspan>
             </text>
           </g>
