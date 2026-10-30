@@ -291,6 +291,7 @@ export function UzChat({ configured }: { configured: boolean }) {
       >
         {open && (
           <>
+            <i className="uz-edge" data-on={glowOn} aria-hidden />
             <div className="uz-glow" data-on={glowOn} data-busy={busy} aria-hidden><i className="uz-glow-soft" /></div>
             <div
               className="uz-frame flex items-end justify-end sm:p-6"

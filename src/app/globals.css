@@ -129,7 +129,7 @@ dialog::backdrop { background: rgb(0 0 0 / 0.65); backdrop-filter: blur(4px); }
 @keyframes uz-drift-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(14%, 10%) scale(1.15); } }
 @keyframes uz-drift-2 { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-12%, 14%) scale(0.9); } }
 @keyframes uz-drift-3 { 0%, 100% { transform: translate(0, 0) scale(0.95); } 50% { transform: translate(10%, -14%) scale(1.2); } }
-@keyframes uz-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes uz-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.09); } }
 @keyframes uz-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 @keyframes uz-pop { from { opacity: 0; transform: translateY(18px) scale(0.93); } to { opacity: 1; transform: none; } }
 @keyframes uz-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -139,18 +139,27 @@ dialog::backdrop { background: rgb(0 0 0 / 0.65); backdrop-filter: blur(4px); }
 /* Orbe tipo Siri: esfera oscura con manchas de color que fluyen por dentro. `data-busy` acelera el flujo mientras piensa. */
 .uz-orb { --s: 56px; position: relative; display: block; width: var(--s); height: var(--s); flex: none; border-radius: 50%; overflow: hidden; isolation: isolate;
   background: radial-gradient(120% 120% at 30% 18%, #262642 0%, #0b0b15 58%, #040407 100%);
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.17), 0 8px 26px -6px rgb(168 85 247 / 0.6), 0 0 22px -4px rgb(56 189 248 / 0.4); }
-.uz-orb-core { position: absolute; inset: -22%; filter: blur(calc(var(--s) * 0.1)); animation: uz-spin 9s linear infinite; }
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22), 0 6px 22px -4px rgb(168 85 247 / 0.75), 0 0 26px -2px rgb(56 189 248 / 0.55); }
+.uz-orb-core { position: absolute; inset: -22%; filter: blur(calc(var(--s) * 0.075)) saturate(1.5) brightness(1.15); animation: uz-spin 6s linear infinite; }
 .uz-orb-core i { position: absolute; border-radius: 50%; mix-blend-mode: screen; will-change: transform; }
-.uz-orb-core i:nth-child(1) { width: 72%; height: 72%; left: 2%; top: 10%; background: radial-gradient(circle, #ff4f9e 0%, transparent 68%); animation: uz-drift-1 5.5s ease-in-out infinite; }
-.uz-orb-core i:nth-child(2) { width: 68%; height: 68%; right: 0; top: 0; background: radial-gradient(circle, #6d5dfc 0%, transparent 68%); animation: uz-drift-2 6.5s ease-in-out infinite; }
-.uz-orb-core i:nth-child(3) { width: 62%; height: 62%; left: 24%; bottom: 0; background: radial-gradient(circle, #22d3ee 0%, transparent 68%); animation: uz-drift-3 7.5s ease-in-out infinite; }
-.uz-orb-core i:nth-child(4) { width: 46%; height: 46%; left: 40%; top: 38%; background: radial-gradient(circle, #ff9a4d 0%, transparent 70%); animation: uz-drift-2 4.5s ease-in-out infinite reverse; }
+.uz-orb-core i:nth-child(1) { width: 86%; height: 86%; left: -4%; top: 6%; background: radial-gradient(circle, #ff4f9e 0%, transparent 68%); animation: uz-drift-1 3.6s ease-in-out infinite; }
+.uz-orb-core i:nth-child(2) { width: 80%; height: 80%; right: -4%; top: -4%; background: radial-gradient(circle, #6d5dfc 0%, transparent 68%); animation: uz-drift-2 4.2s ease-in-out infinite; }
+.uz-orb-core i:nth-child(3) { width: 76%; height: 76%; left: 18%; bottom: -6%; background: radial-gradient(circle, #22d3ee 0%, transparent 68%); animation: uz-drift-3 4.8s ease-in-out infinite; }
+.uz-orb-core i:nth-child(4) { width: 56%; height: 56%; left: 38%; top: 34%; background: radial-gradient(circle, #ff9a4d 0%, transparent 70%); animation: uz-drift-2 3s ease-in-out infinite reverse; }
 .uz-orb-shine { position: absolute; inset: 0; border-radius: 50%;
-  background: radial-gradient(58% 42% at 34% 17%, rgb(255 255 255 / 0.6), transparent 72%), radial-gradient(100% 100% at 50% 50%, transparent 52%, rgb(0 0 0 / 0.5) 100%); }
-.uz-orb[data-busy="true"] .uz-orb-core { animation-duration: 2.2s; }
-.uz-orb[data-busy="true"] .uz-orb-core i { animation-duration: 2.4s; }
-.uz-fab .uz-orb { animation: uz-breathe 5s ease-in-out infinite; transition: transform 0.2s; }
+  background: radial-gradient(58% 42% at 34% 17%, rgb(255 255 255 / 0.55), transparent 72%), radial-gradient(100% 100% at 50% 50%, transparent 62%, rgb(0 0 0 / 0.4) 100%); }
+.uz-orb[data-busy="true"] .uz-orb-core { animation-duration: 1.6s; }
+.uz-orb[data-busy="true"] .uz-orb-core i { animation-duration: 1.8s; }
+/* Aura del botón flotante: un halo cónico que gira (difuminado, por fuera del orbe) y dos ondas que se expanden. */
+@keyframes uz-ripple { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.1); opacity: 0; } }
+@keyframes uz-aura { 0%, 100% { opacity: 0.75; transform: scale(1); } 50% { opacity: 1; transform: scale(1.18); } }
+.uz-fab::before { content: ""; position: absolute; inset: -9px; z-index: -1; border-radius: 50%; filter: blur(11px); animation: uz-a 5s linear infinite, uz-aura 3.2s ease-in-out infinite;
+  background: conic-gradient(from var(--uz-a), #ff4d8d, #ff8a4c, #ffd06b, #5eead4, #38bdf8, #6d5dfc, #c455ff, #ff4d8d); }
+.uz-fab::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 50%; border: 1.5px solid rgb(196 85 255 / 0.9); animation: uz-ripple 3.2s ease-out infinite; }
+.uz-fab:hover::after { animation-play-state: paused; opacity: 0; }
+.uz-fab:has(.uz-orb[data-busy="true"])::before { animation-duration: 1.6s, 1.2s; }
+.uz-fab:has(.uz-orb[data-busy="true"])::after { animation-duration: 1.4s; }
+.uz-fab .uz-orb { animation: uz-breathe 3.6s ease-in-out infinite; transition: transform 0.2s; }
 .uz-fab:hover .uz-orb { transform: scale(1.1); animation-play-state: paused; }
 .uz-fab:active .uz-orb { transform: scale(0.95); }
 .uz-fab .uz-orb[data-busy="true"] { animation: uz-pulse 1.2s ease-in-out infinite; }
@@ -171,11 +180,17 @@ dialog::backdrop { background: rgb(0 0 0 / 0.65); backdrop-filter: blur(4px); }
 .uz-glow[data-busy="true"]::before { animation-duration: 3.2s; }
 .uz-glow[data-busy="true"] .uz-glow-soft { opacity: 1; }
 .uz-glow[data-busy="true"] .uz-glow-soft::before { animation-duration: 4.5s; }
+/* Desenfoque solo en el marco de la pantalla: un anillo de borde duro (clip-path, que sí recorta el backdrop-filter; una máscara no) ; el centro queda nítido. Va fuera de .uz-glow
+   porque una opacidad en el padre le quitaría el fondo al backdrop-filter. */
+.uz-edge { --w: 22px; position: fixed; inset: 0; z-index: 69; pointer-events: none; animation: uz-fade 0.5s ease both;
+  backdrop-filter: blur(9px) saturate(1.25); background: rgb(4 4 10 / 0.28);
+  clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, var(--w) var(--w), var(--w) calc(100% - var(--w)), calc(100% - var(--w)) calc(100% - var(--w)), calc(100% - var(--w)) var(--w), var(--w) var(--w)); }
+.uz-edge[data-on="false"] { opacity: 0; transition: opacity 0.2s ease; animation: none; }
 /* App instalada en iPhone: la pantalla tiene esquinas redondeadas. */
 @media (display-mode: standalone) and (hover: none) { .uz-glow { --uz-glow-r: 46px; } }
 
 dialog.uz-dialog { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; overflow: hidden; background: transparent; }
-dialog.uz-dialog::backdrop { background: rgb(4 4 10 / 0.55); backdrop-filter: blur(8px) saturate(1.2); animation: uz-fade 0.35s ease; }
+dialog.uz-dialog::backdrop { background: rgb(4 4 10 / 0.14); backdrop-filter: none; animation: uz-fade 0.35s ease; }
 dialog.uz-dialog[data-closing="true"]::backdrop { opacity: 0; transition: opacity 0.22s ease; }
 .uz-frame { position: absolute; left: 0; right: 0; top: var(--uz-vt, 0px); height: var(--uz-vh, 100dvh); }
 .uz-panel { transform-origin: 100% 100%; animation: uz-pop 0.38s cubic-bezier(0.2, 0.9, 0.25, 1) both;
