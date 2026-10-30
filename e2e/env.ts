@@ -16,6 +16,8 @@ export const E2E_ENV = {
   DB_SERVER: process.env.DB_SERVER ?? "localhost",
   DB_TRUST_SERVER_CERT: "true",
   CATEGORIZER: "rules",
+  // Llave falsa: UzChat se ve "configurado" y, si algo llegara a llamar a OpenRouter, falla con 401 en vez de gastar o mandar datos.
+  OPENROUTER_API_KEY: "sk-or-e2e-fake-key-0123456789",
   PORT: String(E2E_PORT),
 } as unknown as NodeJS.ProcessEnv & Record<string, string>;
 

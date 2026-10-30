@@ -122,6 +122,69 @@ select.field { appearance: none; background-image: linear-gradient(45deg, transp
 dialog { color: var(--color-fg); background: transparent; border: 0; padding: 0; max-width: 100vw; max-height: 100dvh; margin: auto; }
 dialog::backdrop { background: rgb(0 0 0 / 0.65); backdrop-filter: blur(4px); }
 
+/* ── UzChat: orbe, brillo de borde y panel ─────────────────────────────────────────────────────────── */
+@property --uz-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes uz-a { to { --uz-a: 360deg; } }
+@keyframes uz-spin { to { transform: rotate(360deg); } }
+@keyframes uz-drift-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(14%, 10%) scale(1.15); } }
+@keyframes uz-drift-2 { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-12%, 14%) scale(0.9); } }
+@keyframes uz-drift-3 { 0%, 100% { transform: translate(0, 0) scale(0.95); } 50% { transform: translate(10%, -14%) scale(1.2); } }
+@keyframes uz-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes uz-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes uz-pop { from { opacity: 0; transform: translateY(18px) scale(0.93); } to { opacity: 1; transform: none; } }
+@keyframes uz-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes uz-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes uz-shimmer { to { background-position: -200% 0; } }
+
+/* Orbe tipo Siri: esfera oscura con manchas de color que fluyen por dentro. `data-busy` acelera el flujo mientras piensa. */
+.uz-orb { --s: 56px; position: relative; display: block; width: var(--s); height: var(--s); flex: none; border-radius: 50%; overflow: hidden; isolation: isolate;
+  background: radial-gradient(120% 120% at 30% 18%, #262642 0%, #0b0b15 58%, #040407 100%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.17), 0 8px 26px -6px rgb(168 85 247 / 0.6), 0 0 22px -4px rgb(56 189 248 / 0.4); }
+.uz-orb-core { position: absolute; inset: -22%; filter: blur(calc(var(--s) * 0.1)); animation: uz-spin 9s linear infinite; }
+.uz-orb-core i { position: absolute; border-radius: 50%; mix-blend-mode: screen; will-change: transform; }
+.uz-orb-core i:nth-child(1) { width: 72%; height: 72%; left: 2%; top: 10%; background: radial-gradient(circle, #ff4f9e 0%, transparent 68%); animation: uz-drift-1 5.5s ease-in-out infinite; }
+.uz-orb-core i:nth-child(2) { width: 68%; height: 68%; right: 0; top: 0; background: radial-gradient(circle, #6d5dfc 0%, transparent 68%); animation: uz-drift-2 6.5s ease-in-out infinite; }
+.uz-orb-core i:nth-child(3) { width: 62%; height: 62%; left: 24%; bottom: 0; background: radial-gradient(circle, #22d3ee 0%, transparent 68%); animation: uz-drift-3 7.5s ease-in-out infinite; }
+.uz-orb-core i:nth-child(4) { width: 46%; height: 46%; left: 40%; top: 38%; background: radial-gradient(circle, #ff9a4d 0%, transparent 70%); animation: uz-drift-2 4.5s ease-in-out infinite reverse; }
+.uz-orb-shine { position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(58% 42% at 34% 17%, rgb(255 255 255 / 0.6), transparent 72%), radial-gradient(100% 100% at 50% 50%, transparent 52%, rgb(0 0 0 / 0.5) 100%); }
+.uz-orb[data-busy="true"] .uz-orb-core { animation-duration: 2.2s; }
+.uz-orb[data-busy="true"] .uz-orb-core i { animation-duration: 2.4s; }
+.uz-fab .uz-orb { animation: uz-breathe 5s ease-in-out infinite; transition: transform 0.2s; }
+.uz-fab:hover .uz-orb { transform: scale(1.1); animation-play-state: paused; }
+.uz-fab:active .uz-orb { transform: scale(0.95); }
+.uz-fab .uz-orb[data-busy="true"] { animation: uz-pulse 1.2s ease-in-out infinite; }
+
+/* Brillo en el borde de la pantalla (como Apple Intelligence): un anillo fino y otro difuminado hacia adentro, con un degradado cónico que gira. */
+.uz-glow { position: fixed; inset: 0; z-index: 70; pointer-events: none; border-radius: var(--uz-glow-r, 0px); opacity: 0; transition: opacity 0.2s ease; }
+.uz-glow[data-on="true"] { opacity: 1; animation: uz-fade 0.9s ease both; }
+.uz-glow::before, .uz-glow-soft::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; animation: uz-a 9s linear infinite;
+  background: conic-gradient(from var(--uz-a), #ff4d8d, #ff8a4c, #ffd06b, #5eead4, #38bdf8, #6d5dfc, #c455ff, #ff4d8d);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.uz-glow::before { padding: 2px; opacity: 0.95; }
+/* El desenfoque va en el contenedor (no junto a la máscara): así el anillo se difumina hacia adentro en vez de quedar con borde duro. */
+.uz-glow-soft { position: absolute; inset: 0; border-radius: inherit; filter: blur(24px); opacity: 0.8; }
+.uz-glow-soft::before { padding: 18px; animation-duration: 12s; animation-direction: reverse; }
+.uz-glow[data-busy="true"]::before { animation-duration: 3.2s; }
+.uz-glow[data-busy="true"] .uz-glow-soft { opacity: 1; }
+.uz-glow[data-busy="true"] .uz-glow-soft::before { animation-duration: 4.5s; }
+/* App instalada en iPhone: la pantalla tiene esquinas redondeadas. */
+@media (display-mode: standalone) and (hover: none) { .uz-glow { --uz-glow-r: 46px; } }
+
+dialog.uz-dialog { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; overflow: hidden; background: transparent; }
+dialog.uz-dialog::backdrop { background: rgb(4 4 10 / 0.55); backdrop-filter: blur(8px) saturate(1.2); animation: uz-fade 0.35s ease; }
+dialog.uz-dialog[data-closing="true"]::backdrop { opacity: 0; transition: opacity 0.22s ease; }
+.uz-frame { position: absolute; left: 0; right: 0; top: var(--uz-vt, 0px); height: var(--uz-vh, 100dvh); }
+.uz-panel { transform-origin: 100% 100%; animation: uz-pop 0.38s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.015)), rgb(11 11 17 / 0.86);
+  backdrop-filter: blur(28px) saturate(1.4); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 30px 80px -20px rgb(0 0 0 / 0.9), 0 0 60px -20px rgb(168 85 247 / 0.45); }
+dialog.uz-dialog[data-closing="true"] .uz-panel { opacity: 0; transform: translateY(14px) scale(0.96); transition: opacity 0.2s ease, transform 0.2s ease; }
+.uz-msg { animation: uz-rise 0.25s ease both; }
+.uz-shimmer { background: linear-gradient(90deg, var(--color-muted) 30%, #fff 50%, var(--color-muted) 70%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: uz-shimmer 1.6s linear infinite; }
+
 ::-webkit-scrollbar { height: 8px; width: 8px; }
 ::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 0.12); border-radius: 8px; }
 

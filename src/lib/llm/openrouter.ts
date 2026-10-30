@@ -8,6 +8,10 @@ export const DEFAULT_RECAP_MODEL = "anthropic/claude-haiku-5.5";
 
 export class LlmError extends Error {}
 
+/** Mensaje seguro (sin detalles internos) para un estado HTTP de error de OpenRouter. */
+export const statusMessage = (status: number) =>
+  status === 401 || status === 403 ? "La API key del modelo fue rechazada" : status === 402 ? "Sin saldo en OpenRouter" : status === 429 ? "El modelo está saturado, intenta en un momento" : `El modelo respondió ${status}`;
+
 export type ChatOptions = {
   apiKey: string;
   model: string;
@@ -49,7 +53,7 @@ export async function chat(o: ChatOptions): Promise<string> {
   } catch (e) {
     throw new LlmError((e as Error)?.name === "TimeoutError" ? "El modelo tardó demasiado" : "Sin conexión con el modelo");
   }
-  if (!res.ok) throw new LlmError(res.status === 401 || res.status === 403 ? "La API key del modelo fue rechazada" : res.status === 402 ? "Sin saldo en OpenRouter" : res.status === 429 ? "El modelo está saturado, intenta en un momento" : `El modelo respondió ${res.status}`);
+  if (!res.ok) throw new LlmError(statusMessage(res.status));
   const json = (await res.json().catch(() => null)) as { choices?: { finish_reason?: string; message?: { content?: unknown } }[] } | null;
   const choice = json?.choices?.[0];
   const clean = stripReasoning(contentText(choice?.message?.content));

@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { GlobalDialogs } from "@/components/GlobalDialogs";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { requirePageUser } from "@/lib/auth/page";
+import { getEnv } from "@/lib/env";
 import { listCards } from "@/lib/repo/cards";
 import { listCategories } from "@/lib/repo/categories";
 import { maybeRunPeriodicAlerts, unreadAlertCount } from "@/lib/repo/alerts";
@@ -22,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     unreadAlertCount().catch(() => 0),
   ]);
   return (
-    <AppShell userEmail={user.email} badges={{ "/documentos": docs, "/alertas": alerts }}>
+    <AppShell userEmail={user.email} badges={{ "/documentos": docs, "/alertas": alerts }} aiConfigured={!!getEnv().OPENROUTER_API_KEY}>
       {children}
       <GlobalDialogs cards={cards} categories={categories} />
       <LiveRefresh />

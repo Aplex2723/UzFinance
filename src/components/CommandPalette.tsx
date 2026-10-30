@@ -50,6 +50,7 @@ export function CommandPalette() {
     const go = (href: string) => () => { close(); router.push(href); };
     const nav: Item[] = ALL_ITEMS.map((i) => ({ id: `nav-${i.href}`, group: "Ir a", label: i.label, run: go(i.href) }));
     const actions: Item[] = [
+      { id: "a-chat", group: "Acciones", label: "Preguntar a UzChat", hint: "Tu asesor financiero con IA", run: () => { close(); emit(EVENTS.openChat); } },
       { id: "a-add", group: "Acciones", label: "Agregar gasto", run: () => { close(); emit(EVENTS.addExpense); } },
       { id: "a-csv", group: "Acciones", label: "Importar CSV", run: () => { close(); emit(EVENTS.importCsv); } },
       { id: "a-cat", group: "Acciones", label: "Categorizar pendientes", run: async () => { close(); await apiFetch("/api/transactions/categorize", "POST", {}); router.refresh(); } },

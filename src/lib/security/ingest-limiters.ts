@@ -17,3 +17,8 @@ export const telegramPerIp = new RateLimiter(600, 60_000);
 export const telegramFailures = new RateLimiter(10, 10 * 60_000);
 /** Respuestas a /id (el único comando que contesta a quien no está autorizado): por usuario, para no usar al bot como amplificador. */
 export const telegramIdPerUser = new RateLimiter(5, 60_000);
+
+/** Servidor MCP: un cliente de IA puede encadenar varias consultas por respuesta, así que el cupo por token es generoso; un token inválido sí se castiga por IP. */
+export const mcpPerIp = new RateLimiter(120, 60_000);
+export const mcpFailures = new RateLimiter(10, 10 * 60_000);
+export const mcpPerToken = new RateLimiter(300, 60_000);

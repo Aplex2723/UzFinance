@@ -32,6 +32,10 @@ const map = (r: Row): Transaction => ({ ...r, occurred_at: r.occurred_at.toISOSt
 export type TxFilter = TxCriteria & {
   /** Una tarjeta (se suma a `cardIds`). */
   cardId?: number;
+  /** `q` busca solo en el nombre del comercio (no en las notas). Lo usa UzChat: las notas nunca deben poder deducirse. */
+  qMerchantOnly?: boolean;
+  /** Solo cargos (monto > 0): sin reembolsos. */
+  purchasesOnly?: boolean;
   limit?: number;
   offset?: number;
 };
@@ -55,7 +59,7 @@ function buildWhere(f: TxFilter, opts: { skipCards?: boolean } = {}): { where: s
   const where: string[] = [f.kind === "all" ? "1=1" : `x.kind = '${f.kind === "card_payment" ? "card_payment" : "expense"}'`];
   const params: Params = {};
   if (f.q) {
-    where.push("(x.merchant_normalized LIKE @q ESCAPE '\\' OR x.merchant_raw LIKE @q ESCAPE '\\' OR x.notes LIKE @q ESCAPE '\\')");
+    where.push(f.qMerchantOnly ? "(x.merchant_normalized LIKE @q ESCAPE '\\' OR x.merchant_raw LIKE @q ESCAPE '\\')" : "(x.merchant_normalized LIKE @q ESCAPE '\\' OR x.merchant_raw LIKE @q ESCAPE '\\' OR x.notes LIKE @q ESCAPE '\\')");
     params.q = t.str(`%${f.q.replace(/[\\%_[]/g, "\\$&")}%`);
   }
   if (!opts.skipCards) {
@@ -83,6 +87,7 @@ function buildWhere(f: TxFilter, opts: { skipCards?: boolean } = {}): { where: s
   if (f.minCents && f.minCents > 0) { where.push("ABS(x.amount_cents) >= @minc"); params.minc = t.big(f.minCents); }
   if (f.maxCents && f.maxCents > 0) { where.push("ABS(x.amount_cents) <= @maxc"); params.maxc = t.big(f.maxCents); }
   if (f.unconfirmed) where.push(UNCONFIRMED_SQL);
+  if (f.purchasesOnly) where.push("x.amount_cents > 0");
   if (f.msi) where.push("x.plan_id IS NOT NULL");
   if (f.recurring) where.push("x.is_recurring = 1");
   return { where: where.join(" AND "), params };

@@ -14,3 +14,4 @@ process.env.CATEGORIZER = "rules";
 process.env.DB_TRUST_SERVER_CERT = "true";
 process.env.DB_SERVER ??= "localhost";
 process.env.EMAIL_INGEST_TOKENS = "gmail=email-token-0123456789-abcdefghijklmnopqrstuvwxyz,viejo=old-email-token-0123456789-abcdefghijklmnopqrstuvwx";
+process.env.MCP_TOKENS = "claude=mcp-token-0123456789-abcdefghijklmnopqrstuvwxyz,viejo=old-mcp-token-0123456789-abcdefghijklmnopqrstuvwxyz";

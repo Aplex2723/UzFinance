@@ -9,7 +9,7 @@ Cómo está armado UzFinance y por dónde entran los datos.
         ▼                                           ▼
    Atajo ── POST /api/ingest ───┐        ┌── App Service Authentication (Easy Auth)
    Authorization: Bearer <token>│        │   Entra ID · single-tenant · asignación obligatoria
-                                ▼        ▼   (todo exige sesión, salvo excludedPaths: /api/ingest, /api/ingest/email, /api/whatsapp, /api/telegram)
+                                ▼        ▼   (todo exige sesión, salvo excludedPaths: /api/ingest, /api/ingest/email, /api/mcp, /api/whatsapp, /api/telegram)
                      ┌──────────────────────────────────┐
                      │ Azure App Service F1 (Linux)     │
                      │ Next.js 16 (standalone, Node 24) │

@@ -23,6 +23,7 @@ export const EVENTS = {
   addExpense: "uz:add-expense",
   importCsv: "uz:import-csv",
   editTransaction: "uz:edit-transaction",
+  openChat: "uz:open-chat",
 } as const;
 
 export const emit = (name: string, detail?: unknown) => window.dispatchEvent(new CustomEvent(name, { detail }));

@@ -13,7 +13,7 @@ const dateEs = (iso: string) => `${Number(iso.slice(8))} de ${monthLabel(iso.sli
 /** Los nombres los escribe el usuario: sin caracteres de control ni saltos de línea y con tope de largo. */
 export const cleanLabel = (s: string, max = 60) => s.replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 
-const STATUS_TEXT: Record<GoalStatus, string> = {
+export const STATUS_TEXT: Record<GoalStatus, string> = {
   done: "lograda", on_track: "a tiempo", tight: "a tiempo pero justa", late: "se retrasa", unreachable: "no se alcanza en 10 años", overdue: "fecha vencida", no_data: "sin datos",
 };
 

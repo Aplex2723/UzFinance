@@ -2,6 +2,7 @@ import { query } from "@/lib/db/pool";
 
 export const ALLOWED = "owner@example.com";
 export const EMAIL_TOKEN = "email-token-0123456789-abcdefghijklmnopqrstuvwxyz";
+export const MCP_TOKEN = "mcp-token-0123456789-abcdefghijklmnopqrstuvwxyz";
 export const TOKEN = "test-token-0123456789-abcdefghijklmnopqrstuvwxyz";
 
 export function principalHeader(claims: { typ: string; val: string }[]) {

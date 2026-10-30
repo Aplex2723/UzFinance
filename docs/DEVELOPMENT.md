@@ -12,10 +12,12 @@ Plantilla en [`.env.example`](../.env.example). En Azure son *App Settings*.
 | `ALLOWED_EMAIL` | tu correo | tu correo | Allowlist del correo que puede entrar |
 | `ALLOWED_TENANT_ID` | — | tenant | Si se define, el claim `tid` debe coincidir |
 | `EMAIL_INGEST_TOKENS` | aleatorio | aleatorio | Tokens del puente Gmail, `nombre=token,otro=token` (cada token ≥ 32). **Distinto** de `INGEST_TOKEN`; sin definir, el endpoint rechaza todo |
+| `MCP_TOKENS` | opcional | aleatorio | Tokens del servidor MCP (`/api/mcp`, solo lectura), `nombre=token,otro=token` (cada token ≥ 32). **Distinto** de `INGEST_TOKEN`; sin definir, el endpoint rechaza todo. Azure: `scripts/mcp-setup.sh` |
 | `INGEST_TOKEN` | aleatorio | aleatorio | Token Bearer de `/api/ingest` (≥ 32 caracteres) |
 | `INGEST_TOKEN_PREVIOUS` | — | solo en rotación | Token anterior aún válido durante la rotación |
 | `CATEGORIZER` | `rules` | `rules` | `rules` o `jev` |
-| `OPENROUTER_API_KEY` | — | — | API key de OpenRouter para Jev (secreto: App Setting en Azure) |
+| `OPENROUTER_API_KEY` | — | — | API key de OpenRouter para Jev, los resúmenes con IA y UzChat (secreto: App Setting en Azure) |
+| `CHAT_LLM_MODEL` | — | — | Modelo de UzChat (con soporte de herramientas); por omisión `GOALS_LLM_MODEL` o `anthropic/claude-haiku-5.5` |
 | `DB_SERVER`, `DB_PORT`, `DB_NAME` | `localhost`, 1433, `uzfinance` | `<srv>.database.windows.net`, —, `uzfinance` | Conexión |
 | `DB_AUTH` | `password` | `msi` | `msi` = Managed Identity (sin passwords) |
 | `DB_USER`, `DB_PASSWORD`, `DB_SA_PASSWORD` | docker local | — | Solo local |

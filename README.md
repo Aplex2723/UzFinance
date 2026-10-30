@@ -42,6 +42,8 @@ Mexican banks don't offer open banking APIs, and aggregators want your online-ba
 | 📊 **Dashboard** | Month-to-date spend vs. income, daily budget, end-of-month projection, spend by weekday, card → category **Sankey** flow, 12-week heatmap, rule-based insights ("you spend 30 % less than last month") |
 | 💳 **Cards & installments** | Illustrated cards per issuer, per-card breakdown, **meses sin intereses (MSI)** plans with remaining balance and payoff dates |
 | 🎯 **Savings goals** | Several goals at once with priorities; a cascade forecast tells you which ones you'll hit on time and what to cut to make the rest |
+| ✨ **UzChat** | A floating orb opens a personal-finance assistant: ask what you spent, which categories weigh most, or "can I save $50,000 in 6 months?". It queries your data through read-only tools (all math goes through a calculator) and streams the answer. Optional: needs an OpenRouter key; it **does** send the merchants and amounts it looks up to the model (see [docs/GUIA.md](docs/GUIA.md)) |
+| 🔌 **MCP server** | `/api/mcp` exposes UzChat's read-only tools to any MCP client (Claude Code, Cursor, VS Code…) behind per-client Bearer tokens (`MCP_TOKENS`); fails closed without tokens. See `docs/GUIA.md` §14. |
 | 🧾 **Statements & receipts** | Upload Amex / Banamex / Nu statement PDFs: deterministic extractors with total verification (**no LLM ever reads your numbers**). Transfer receipts via OCR (Azure AI Vision, or fully local Tesseract) |
 | 🏷️ **Smart categories** | Your rules → your history → optional LLM fallback (OpenRouter) that only sees the merchant name. Anything uncertain is queued for you to confirm once |
 | 🔔 **Alerts** | Unusual charges, reconciliation gaps, quiet hours; optional push to Telegram |

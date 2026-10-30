@@ -230,11 +230,12 @@ export type CategoryAvg = { name: string; avg: number };
 
 /** Gastos fijos o inevitables: no se sugiere recortarlos. */
 const FIXED_CATEGORY = /servicios|salud|impuestos|gobierno|comisiones|intereses|educaci|sin categor/i;
+export const isFixedCategory = (name: string) => FIXED_CATEGORY.test(name);
 const TRIM_PCT = 15;
 
 /** Dónde recortar: las categorías discrecionales más grandes y cuánto liberaría quitarles 15%. */
 export function trimIdeas(cats: CategoryAvg[], max = 3): { picks: CategoryAvg[]; pct: number; freed: number } | null {
-  const picks = cats.filter((c) => c.avg > 0 && !FIXED_CATEGORY.test(c.name)).sort((a, b) => b.avg - a.avg).slice(0, max);
+  const picks = cats.filter((c) => c.avg > 0 && !isFixedCategory(c.name)).sort((a, b) => b.avg - a.avg).slice(0, max);
   if (!picks.length) return null;
   return { picks, pct: TRIM_PCT, freed: Math.round(picks.reduce((a, c) => a + c.avg, 0) * (TRIM_PCT / 100)) };
 }

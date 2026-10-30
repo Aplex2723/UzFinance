@@ -6,14 +6,14 @@ import { persistAuthCookie } from "@/lib/auth/session-cookie";
  * Defensa en profundidad + CSP con nonce.
  *  0) Excluidos del matcher: estáticos públicos (íconos y manifest) que el navegador pide sin cookies.
  *  1) Valida la sesión de Easy Auth (X-MS-CLIENT-PRINCIPAL + allowlist) para todo
- *     salvo /api/ingest y /api/ingest/email (token Bearer propio), /api/whatsapp (verify token de Meta + firma HMAC del cuerpo) y
+ *     salvo /api/ingest y /api/ingest/email (token Bearer propio), /api/mcp (servidor MCP: tokens Bearer propios, solo lectura), /api/whatsapp (verify token de Meta + firma HMAC del cuerpo) y
  *     /api/telegram (encabezado secreto X-Telegram-Bot-Api-Secret-Token).
  *  2) Cada handler y página vuelve a validar: este archivo no es la única barrera.
  *  3) Rutas sin sesión (webhooks e ingest): 413 por Content-Length declarado excesivo antes de que Next copie el cuerpo en memoria.
  */
-/** Fuera de Easy Auth: cada uno se autentica por su cuenta (token Bearer; el webhook de WhatsApp, con la firma X-Hub-Signature-256 de Meta;
+/** Fuera de Easy Auth: cada uno se autentica por su cuenta (token Bearer, también el servidor MCP; el webhook de WhatsApp, con la firma X-Hub-Signature-256 de Meta;
  *  el de Telegram, con el secret_token del setWebhook). Rutas EXACTAS: nada de prefijos. */
-const TOKEN_AUTH_PATHS = new Set(["/api/ingest", "/api/ingest/email", "/api/whatsapp", "/api/telegram"]);
+const TOKEN_AUTH_PATHS = new Set(["/api/ingest", "/api/ingest/email", "/api/mcp", "/api/whatsapp", "/api/telegram"]);
 
 /**
  * Next copia en memoria el cuerpo de lo que pasa por este proxy (hasta `proxyClientMaxBodySize`, 14 MB por los PDF de la app). Las rutas
@@ -22,7 +22,7 @@ const TOKEN_AUTH_PATHS = new Set(["/api/ingest", "/api/ingest/email", "/api/what
  */
 const BODY_LIMITS: [match: (p: string) => boolean, maxBytes: number][] = [
   [(p) => p === "/api/whatsapp" || p === "/api/telegram", 256 * 1024],
-  [(p) => p === "/api/ingest" || p.startsWith("/api/ingest/"), 64 * 1024],
+  [(p) => p === "/api/ingest" || p.startsWith("/api/ingest/") || p === "/api/mcp", 64 * 1024],
 ];
 
 function declaredTooLarge(pathname: string, contentLength: string | null): boolean {

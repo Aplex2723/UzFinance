@@ -152,6 +152,7 @@ describe("proxy: tope de Content-Length en rutas sin sesión (antes de que Next 
     ["/api/telegram", 256 * KB],
     ["/api/ingest", 64 * KB],
     ["/api/ingest/email", 64 * KB],
+    ["/api/mcp", 64 * KB],
   ])("%s: justo en el tope pasa y un byte más → 413", async (path, max) => {
     expect(px(path, String(max)).status).toBe(200);
     expect(px(path, "0").status).toBe(200);

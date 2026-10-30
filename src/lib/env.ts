@@ -69,11 +69,21 @@ const schema = z.object({
     .string()
     .optional()
     .refine((v) => !v || parseNamedTokens(v) !== null, "EMAIL_INGEST_TOKENS: formato nombre=token (token ≥ 32 caracteres)"),
+  /**
+   * Tokens del servidor MCP (/api/mcp, solo lectura de tus finanzas), uno por cliente para revocarlos por separado:
+   * "claude=token,cursor=token". DISTINTOS a INGEST_TOKEN (ese solo escribe movimientos). Sin definir, /api/mcp rechaza todo.
+   */
+  MCP_TOKENS: z
+    .string()
+    .optional()
+    .refine((v) => !v || parseNamedTokens(v) !== null, "MCP_TOKENS: formato nombre=token (token ≥ 32 caracteres)"),
   /** rules = solo reglas; jev = reglas + historial + Jev (necesita OPENROUTER_API_KEY; sin ella cae a reglas). */
   CATEGORIZER: z.enum(["rules", "jev"]).default("rules"),
   OPENROUTER_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(20).optional()),
   /** Modelo de OpenRouter para el resumen de metas (por omisión anthropic/claude-haiku-5.5). */
   GOALS_LLM_MODEL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().regex(/^[\w.~-]+\/[\w.:~-]+$/, "GOALS_LLM_MODEL: formato proveedor/modelo").max(80).optional()),
+  /** Modelo de OpenRouter para UzChat (necesita soportar herramientas; por omisión el mismo que el resumen de metas). */
+  CHAT_LLM_MODEL: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().regex(/^[\w.~-]+\/[\w.:~-]+$/, "CHAT_LLM_MODEL: formato proveedor/modelo").max(80).optional()),
   DB_SERVER: z.string().min(1),
   DB_PORT: z.coerce.number().default(1433),
   DB_NAME: z.string().min(1),

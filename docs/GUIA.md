@@ -73,7 +73,7 @@ entrada no confiable (no se loguea ni se guarda completo); no declarar algo func
   **borrar la regla**. Fijar `--subscription` explícito en los comandos `az`.
 - **Easy Auth `excludedPaths`** (rutas con su propio token Bearer o públicas y estáticas): `/api/ingest`,
   `/api/ingest/email`, `/api/whatsapp` (webhook de Meta: verify token + firma HMAC), `/api/telegram` (webhook de Telegram: encabezado secreto), `/manifest.webmanifest`, `/icons/*`. Las demás exigen sesión.
-- **Secretos:** solo como App Settings (`INGEST_TOKEN`, `EMAIL_INGEST_TOKENS="gmail=<token>"`, `WHATSAPP_*` vía `scripts/whatsapp-setup.sh`, `TELEGRAM_*` vía `scripts/telegram-setup.sh`) y en el Atajo / las propiedades del
+- **Secretos:** solo como App Settings (`INGEST_TOKEN`, `EMAIL_INGEST_TOKENS="gmail=<token>"`, `MCP_TOKENS` vía `scripts/mcp-setup.sh`, `WHATSAPP_*` vía `scripts/whatsapp-setup.sh`, `TELEGRAM_*` vía `scripts/telegram-setup.sh`) y en el Atajo / las propiedades del
   Apps Script. Nunca en el repo, en logs ni en el chat. La base gratuita se pausa a los 60 min sin uso (primer arranque 30–60 s).
 
 ## 4. Configurar Gmail (correos de Banamex)
@@ -511,7 +511,30 @@ correr el script, aceptar reutilizar el token y escribir la lista nueva (el secr
 - **Alertas**: `goal_off_track` evalúa cada meta, repartiendo el ahorro proyectado del mes entre ellas por prioridad (aviso semanal por meta: `goal:<id>:<semana>`).
 - **Resumen con IA** (`/metas`, botón "Generar resumen"): OpenRouter chat (`OPENROUTER_API_KEY`, la misma del categorizador; modelo `GOALS_LLM_MODEL`, por omisión `anthropic/claude-haiku-5.5`, ≈ US$0.001 por resumen). Solo se envían cifras agregadas ya calculadas (ingreso, gasto típico, metas, categorías con promedio): nunca comercios, tarjetas ni descripciones. Se pide `data_collection: deny` a OpenRouter, se verifica que cada monto del texto exista en las cifras enviadas (si no, un reintento y luego se descarta) y se guarda en `app_settings.goals_recap`. Máx. 8 por hora. Es a pedido: nunca se llama al modelo solo por abrir la página.
 - **Análisis del mes con IA** (inicio, debajo de "Insights del mes"): mismo mecanismo (`src/lib/month-recap.ts`, `POST /api/insights/recap`, máx. 12 por hora). Manda cifras del mes seleccionado (gastado, proyección, categorías, días, MSI y un resumen de metas), sin comercios; se guarda por mes en `app_settings.month_recap:AAAA-MM`.
+- **UzChat** (orbe flotante abajo a la derecha en toda la app, o ⌘K → «Preguntar a UzChat»): asesor financiero conversacional. Al abrirlo un brillo de colores recorre el borde de la pantalla (más rápido mientras piensa). Es un **agente con herramientas de solo lectura** (`src/lib/chat/`): `POST /api/chat` recibe la conversación, el modelo (OpenRouter, `CHAT_LLM_MODEL`; por omisión Haiku 5.5) pide consultas y el servidor las ejecuta contra la base; la respuesta vuelve por streaming NDJSON (`src/lib/chat/events.ts`). Herramientas (`tools.ts`): resumen de gasto por periodo, cómo va el mes, gasto por categoría / tarjeta / comercio, tendencia por mes-semana-día, búsqueda de movimientos, MSI, metas, simulador «quiero ahorrar $X en N meses», cargos recurrentes y una **calculadora** (todas las cuentas pasan por ella: los modelos fallan en aritmética). Máx. 6 vueltas modelo→herramientas por mensaje, 60 mensajes por hora.
+  - **Privacidad (decisión del dueño): a diferencia de los resúmenes, UzChat SÍ ve comercios y montos por movimiento** (lo necesita para «¿cuánto gasté en Uber?»). Nunca ve notas, códigos de autorización ni cuentas. Se pide `data_collection: deny`. Los nombres que llegan al modelo se limpian (sin saltos de línea ni `<>`) y el prompt los trata como datos, no como instrucciones. Para volver a «solo agregados» basta quitar `search_transactions` y `top_merchants` de `TOOLS` en `tools.ts`.
+  - Las cifras NO se verifican contra una lista (como en los resúmenes) porque el chat puede calcular; por eso la calculadora y la regla de «copia las cifras tal cual». Es solo lectura: no registra gastos ni toca metas.
+  - El servidor no guarda conversaciones: viven en el `localStorage` del dispositivo (máx. 40 mensajes; «Nueva conversación» las borra). Las llamadas a herramientas no se guardan: en el siguiente mensaje el modelo vuelve a consultar.
+  - El flujo se manda con `Cache-Control: no-transform` y `Content-Encoding: identity` para que nada lo comprima/retenga; si el front de App Service lo bufferizara, el chat sigue funcionando pero sin ver el texto aparecer poco a poco (SIN VERIFICAR en producción).
 - **Haiku 5.5 razona por defecto**: sin `reasoning: {effort:"none"}` esos tokens agotaban `max_tokens` y la respuesta salía vacía o cortada. `chat()` lo desactiva y rechaza respuestas con `finish_reason: length`.
+
+## 14. Servidor MCP (que tu IA consulte tus finanzas)
+
+`/api/mcp` es un servidor [MCP](https://modelcontextprotocol.io) (Model Context Protocol, transporte HTTP sin estado) que expone a cualquier cliente de IA las **mismas herramientas de solo lectura que UzChat** (gasto por periodo, categorías, tarjetas, comercios, MSI, metas, simulador de ahorro, calculadora…). Así Claude, Cursor, VS Code, etc. pueden contestar «¿cuánto llevo gastado este mes?» con tus datos reales, sin que tengas que copiarlos.
+
+- **Seguridad**: es la única puerta con datos financieros fuera de Easy Auth, así que se protege con **tokens Bearer propios** (`MCP_TOKENS="claude=<token>,cursor=<token>"`, uno por cliente para revocarlos por separado; ≥ 32 caracteres, distintos de `INGEST_TOKEN`). Comparación en tiempo constante; **sin tokens configurados rechaza todo**; 10 tokens inválidos bloquean la IP 10 min; tope por token (300/min); rechaza cualquier petición con cabecera `Origin` (un navegador); cuerpo máx. 64 KB; el log guarda solo quién, método y duración (nunca argumentos ni resultados). Es **solo lectura**: no hay herramienta que escriba, y nunca devuelve notas, códigos de autorización ni números de cuenta.
+- **Privacidad**: lo que el cliente ve (comercios y montos por movimiento) se manda al proveedor de ese cliente (p. ej. Anthropic si usas Claude). Conecta solo clientes en los que confíes y revoca el token cuando dejes de usarlo.
+- **Puesta en marcha (Azure)**, en tu terminal:
+  1. Desplegar este código (push a `main`).
+  2. `scripts/mcp-setup.sh --exclude-path`: agrega `/api/mcp` a `excludedPaths` de Easy Auth (mezcla con las rutas que ya había; `--dry-run` solo muestra el cambio).
+  3. `scripts/mcp-setup.sh claude`: genera el token del cliente `claude`, lo guarda como App Setting y lo muestra **una sola vez**. `--list` muestra los nombres, `--revoke claude` lo revoca; volver a correrlo con el mismo nombre **rota** ese token.
+  4. Comprobar: `curl -s -i -X POST https://<app>.azurewebsites.net/api/mcp -H 'content-type: application/json' -d '{}'` debe dar **401 `{"error":"No autorizado"}`** (de la app), no una redirección 302 de Easy Auth.
+- **Conectar un cliente** (URL `https://<app>.azurewebsites.net/api/mcp`, cabecera `Authorization: Bearer <token>`):
+  - Claude Code: `claude mcp add --transport http uzfinance https://<app>.azurewebsites.net/api/mcp --header "Authorization: Bearer <token>"`.
+  - Cursor / VS Code: en su `mcp.json`, `{"url": "https://<app>.azurewebsites.net/api/mcp", "headers": {"Authorization": "Bearer <token>"}}`.
+  - Claude Desktop: no admite cabeceras fijas en conectores remotos; usa el puente `mcp-remote` (`npx mcp-remote <url> --header "Authorization: Bearer <token>"`) en `claude_desktop_config.json`. Los conectores de claude.ai en la web exigen OAuth, que este servidor **no** implementa.
+- **Local**: con `MCP_TOKENS` en `.env`, `npm run dev` y la misma URL en `http://localhost:3000/api/mcp`. Para probar con IA real usa una base de demostración, no tus datos.
+- **Límites**: sin sesiones ni flujo SSE (GET/DELETE → 405), sin OAuth, un solo dueño. Lotes JSON-RPC de hasta 10 mensajes.
 
 ## 13. Trampas conocidas
 

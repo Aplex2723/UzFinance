@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { CommandPalette } from "./CommandPalette";
+import { UzChat } from "./uzchat/UzChat";
 import { ALL_ITEMS, NAV, type NavBadges } from "./nav";
 
 function Logo() {
@@ -100,7 +101,7 @@ function BottomNav({ onMore, moreBadge }: { onMore: () => void; moreBadge: numbe
   );
 }
 
-export function AppShell({ children, userEmail, badges = {} }: { children: ReactNode; userEmail: string; badges?: NavBadges }) {
+export function AppShell({ children, userEmail, badges = {}, aiConfigured = false }: { children: ReactNode; userEmail: string; badges?: NavBadges; aiConfigured?: boolean }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   const current = ALL_ITEMS.find((i) => (i.href === "/" ? path === "/" : path.startsWith(i.href)));
@@ -142,6 +143,7 @@ export function AppShell({ children, userEmail, badges = {} }: { children: React
         <main className="mx-auto w-full max-w-[1280px] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 lg:pb-5">{children}</main>
       </div>
       <BottomNav onMore={() => setOpen(true)} moreBadge={Object.values(badges).reduce<number>((a, n) => a + (n ?? 0), 0)} />
+      <UzChat configured={aiConfigured} />
     </div>
   );
 }
