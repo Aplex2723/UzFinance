@@ -130,6 +130,26 @@ describe("importStatements", () => {
     expect(rep.docs.reduce((a, d) => a + d.existing, 0)).toBe(1);
   });
 
+  it("reimportar a la vez el estado de la tarjeta y el del débito no duplica el pago (la fila existente sirve a los dos)", async () => {
+    const cardDoc = doc({ document: "plata_stmt", card_key: "plata", transactions: [tx({ date: "2026-08-28", merchant: "GRACIAS POR SU PAGO EN LINEA", amount_cents: -4_053_669, type: "payment" })] });
+    const debitDoc = doc({ document: "banco_debito", card_key: "banco", transactions: [tx({ date: "2026-08-31", merchant: "PLATA CO", amount_cents: 4_053_669, type: "domiciliation_card_payment", section: "domiciliation" })] });
+    await run([cardDoc, debitDoc]);
+    await run([cardDoc, debitDoc]);
+    await run([debitDoc]);
+    await run([cardDoc]);
+    expect((await rows()).filter((x) => x.kind === "card_payment")).toHaveLength(1);
+  });
+
+  it("dos pagos iguales dentro del MISMO estado son dos pagos distintos", async () => {
+    const cardDoc = doc({ document: "plata_stmt", card_key: "plata", transactions: [
+      tx({ date: "2026-08-28", merchant: "GRACIAS POR SU PAGO EN LINEA", amount_cents: -500_00, type: "payment" }),
+      tx({ date: "2026-08-30", merchant: "GRACIAS POR SU PAGO EN LINEA", amount_cents: -500_00, type: "payment" }),
+    ] });
+    await run([cardDoc]);
+    await run([cardDoc]);
+    expect((await rows()).filter((x) => x.kind === "card_payment")).toHaveLength(2);
+  });
+
   it("holders de Amex: el titular va a la tarjeta por defecto y el adicional a su propia tarjeta", async () => {
     const amex = doc({
       document: "plata_stmt", card_key: "plata", as_of: "2026-09-25", period: { start: "2026-08-26", end: "2026-09-25" },

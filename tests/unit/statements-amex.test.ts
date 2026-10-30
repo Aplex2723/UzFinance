@@ -145,3 +145,24 @@ describe("Amex: detección y validación por index", () => {
     expect(doc.installment_postings).toHaveLength(1);
   });
 });
+
+describe("Amex: sección 'Transacciones financieras' fuera de los bloques por titular", () => {
+  // Reembolso de 8.00 (CR), comisión de 0.01 y su reverso (CR): neto 8.00 a favor, como "Total de las transacciones y comisiones 8.00 CR".
+  const FIN = (): PdfWord[] => [
+    ...row(430, [D, "Transacciones financieras aplicables a la Cuenta Básica"]),
+    ...tx(442, "8 de Septiembre", "AEROLINEA FICTICIA ONLINE", "8.00"), ...cr(454),
+    ...tx(466, "9 de Septiembre", "SERVICIO DE FACTURACION POR REDENCION", "0.01"),
+    ...tx(478, "9 de Septiembre", "REVERSION CARGO SERVICIO DE FACTURACION", "0.01"), ...cr(490),
+    ...total(502, "Total de las transacciones y comisiones", "8.00"), ...cr(514),
+    ...total(526, "Total de IVA sobre transacciones y comisiones", "0.00"),
+  ];
+  const page1 = () => PAGE1("500.00 - 528.01 + 552.51 = 524.50 50.00");
+  const doc = extractAmex(pdfOf([page1(), PAGE2(), [...PAGE3(), ...FIN()]]));
+  it("se leen como comisión y reembolsos del titular y todos los checks cuadran", () => {
+    expect(doc.warnings).toEqual([]);
+    expect(doc.checks.filter((c) => !c.ok)).toEqual([]);
+    const fin = doc.transactions.filter((t) => t.statement_section === "financial");
+    expect(fin.map((t) => [t.type, t.amount_cents])).toEqual([["refund", -800], ["fee", 1], ["refund", -1]]);
+    expect(fin.every((t) => t.holder === "ANA PRUEBA LOPEZ")).toBe(true);
+  });
+});

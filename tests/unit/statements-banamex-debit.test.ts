@@ -186,3 +186,25 @@ describe("Banamex débito: detección y validación por index", () => {
     expect(doc.warnings.some((w) => w.startsWith("concepto sin clasificar"))).toBe(true);
   });
 });
+
+describe("Banamex débito: resumen de operaciones con tarjeta tras el último renglón", () => {
+  it("no toma los importes del resumen como saldo del último movimiento", () => {
+    const words = table(ROWS, { tail: false });
+    const y = Math.max(...words.map((w) => w.top)) + 24;
+    words.push(...row(y, [30, "Resumen Operaciones Tarjeta"]), ...row(y + 12, [80, "TOTAL GENERAL 2"], [520, "168.00", { w: 50 }]));
+    const doc = extractBanamexDebit(pdfOf([page1(), words]));
+    expect(doc.checks.filter((c) => !c.ok)).toEqual([]);
+    expect(doc.transactions.at(-1)).toMatchObject({ amount_cents: 8790 });
+  });
+});
+
+describe("Banamex débito: pago a una tarjeta de crédito Banamex ('A TB')", () => {
+  it("es un pago de tarjeta (no un gasto) y lleva los últimos 4 de la tarjeta", () => {
+    const r = classifyDebitRow(["PAGO DE SERVICIO 123456 A TB", "4000111122223333"], "ANA PRUEBA LOPEZ", true, 150_000);
+    expect(r).toMatchObject({ type: "domiciliation_card_payment", merchant: "Pago a tarjeta Banamex ···3333" });
+  });
+  it("el pago de impuestos y las compras con tarjeta de débito siguen igual", () => {
+    expect(classifyDebitRow(["PAGO DE SERVICIO 897379 PAGO", "DE IMPUESTOS REFERENCIADO", "S.A.T."], "ANA", true, 1).type).toBe("tax");
+    expect(classifyDebitRow(["Tienda Online Falsa", "Ciudad Ejemplo", "20260824 1111222233334444 9001/0011"], "ANA", true, 5050).type).toBe("purchase");
+  });
+});

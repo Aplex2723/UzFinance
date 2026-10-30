@@ -45,7 +45,7 @@ export function linkPlan(plans: Pick<Plan, "merchant" | "original_cents" | "mont
   return best ? { merchant: best.plan.merchant, original_cents: best.plan.original_cents } : null;
 }
 
-type Pending = { _day: number | null; _month: string | null; _desc: string[]; _amt: number; _cr: boolean; _extra: string[]; date?: string | null; holder?: string | null; section?: string };
+type Pending = { _fin?: boolean; _day: number | null; _month: string | null; _desc: string[]; _amt: number; _cr: boolean; _extra: string[]; date?: string | null; holder?: string | null; section?: string };
 
 /** "28 de Agosto", "28 deAgosto" o solo "28 de": día y nombre del mes (o null si todavía no llega). */
 function dayMonth(ws: PdfWord[]): { day: number | null; month: string | null } {
@@ -85,7 +85,7 @@ export function extractAmex(pdf: PdfText, document = "amex_stmt", cardKey = "ame
   if (nt) summary.nuevas_transacciones = parseMoney(nt[1]);
   doc.summary = summary;
 
-  let mode: "txn" | "msi_monthly" | "plans" | null = null;
+  let mode: "txn" | "msi_monthly" | "plans" | "fin" | null = null;
   const block: Pending[] = []; // transacciones pendientes de asignar a un titular
   const closed: Pending[] = [];
   let cur: Pending | null = null;
@@ -115,10 +115,12 @@ export function extractAmex(pdf: PdfText, document = "amex_stmt", cardKey = "ame
       const txt = wordsText(ln);
       if (txt.startsWith("Fecha y Detalle de las operaciones")) { if (mode !== "msi_monthly") mode = "txn"; continue; }
       if (txt.startsWith("Transacciones de Meses sin Intereses")) { mode = "msi_monthly"; cur = null; continue; }
+      // Comisiones y reversos que Amex lista aparte, fuera de los bloques por titular (p. ej. un reembolso "VIVAAEROBUS ONLINE ... CR").
+      if (txt.startsWith("Transacciones financieras aplicables")) { mode = "fin"; cur = null; continue; }
       if (txt.startsWith("Consolidado de compras en Meses sin")) { mode = "plans"; curPlan = null; continue; }
       if (txt.startsWith("Paga desde los canales")) { mode = null; continue; }
       if (top < 135 || top > 742) continue;
-      if (mode === "txn" || mode === "msi_monthly") {
+      if (mode === "txn" || mode === "msi_monthly" || mode === "fin") {
         const amtWords = ln.filter((w) => w.x0 >= 480 && AMT.test(w.str));
         const dateWords = ln.filter((w) => w.x0 < 80);
         const descWords = ln.filter((w) => w.x0 >= 80 && w.x0 < 480);
@@ -138,6 +140,14 @@ export function extractAmex(pdf: PdfText, document = "amex_stmt", cardKey = "ame
           flush(name, true);
           continue;
         }
+        if (mode === "fin" && txt.startsWith("Total de las transacciones y comisiones")) {
+          if (!amtWords.length) { doc.warnings.push("renglon de total sin importe"); continue; }
+          // el signo ("CR") llega en el renglón siguiente: se deduce de los propios movimientos al comparar
+          printed.fin_total = parseMoney(amtWords.at(-1)!.str);
+          flush(totals[0]?.[1] ?? "", false);
+          mode = null;
+          continue;
+        }
         if (txt.startsWith("Total de Meses sin Intereses")) {
           if (amtWords.length) printed.msi_monthly = parseMoney(amtWords.at(-1)!.str);
           mode = null;
@@ -147,8 +157,8 @@ export function extractAmex(pdf: PdfText, document = "amex_stmt", cardKey = "ame
         // --- nuevo movimiento (tiene importe a la derecha)
         if (amtWords.length && descWords.length) {
           const { day, month } = dayMonth(dateWords);
-          cur = { _day: day, _month: month, _desc: [wordsText(descWords)], _amt: parseMoney(amtWords.at(-1)!.str), _cr: false, _extra: [] };
-          (mode === "txn" ? block : postings).push(cur);
+          cur = { _day: day, _month: month, _desc: [wordsText(descWords)], _amt: parseMoney(amtWords.at(-1)!.str), _cr: false, _extra: [], ...(mode === "fin" ? { _fin: true } : {}) };
+          (mode === "msi_monthly" ? postings : block).push(cur);
           continue;
         }
         if (cur === null) continue;
@@ -248,14 +258,14 @@ export function extractAmex(pdf: PdfText, document = "amex_stmt", cardKey = "ame
       } else type = "refund";
       [merchant, city] = type === "refund" ? splitAmexCity(desc) : [desc, null];
     } else {
-      type = inst ? "installment" : "purchase";
+      type = t._fin ? "fee" : inst ? "installment" : "purchase";
       [merchant, city] = splitAmexCity(desc);
     }
     if (city) note = `ciudad: ${city}`;
     const raw = [desc, ...t._extra, ...(t._cr ? ["CR"] : [])].join(" ");
     const d = makeTxn({
       date: t.date ?? null, merchant, raw, amount_cents: cents, type, holder: t.holder ?? null, section: t.section ?? "regular",
-      installment: inst, foreign, note, rfc: rfc ? rfc[1] : null,
+      installment: inst, foreign, note, rfc: rfc ? rfc[1] : null, ...(t._fin ? { statement_section: "financial" } : {}),
     });
     if (inst) d.plan_ref = linkPlan(doc.plans, merchant, Math.abs(cents), inst.n);
     return d;
@@ -280,17 +290,19 @@ export function extractAmex(pdf: PdfText, document = "amex_stmt", cardKey = "ame
   // ---- checks
   const all = doc.transactions;
   totals.forEach(([k, n, c], idx) => {
-    const mine = all.filter((t) => t.holder === n && (t.section === "foreign") === (k === "foreign"));
+    const mine = all.filter((t) => t.holder === n && (t.section === "foreign") === (k === "foreign") && t.statement_section !== "financial");
     // el total del bloque = cargos - créditos del propio bloque (reembolsos y "MONTO A DIFERIR"), sin contar los pagos a la tarjeta
     const net = mine.reduce((s, t) => s + (t.type !== "payment" ? t.amount_cents : 0), 0);
     doc.checks.push(makeCheck(`total bloque #${idx + 1} (${k === "foreign" ? "extranjero" : "titular/adicional"}; cargos - creditos, sin pagos)`, c, net));
   });
+  const fin = all.filter((t) => t.statement_section === "financial");
+  if ("fin_total" in printed) doc.checks.push(makeCheck("total de transacciones y comisiones (sección financiera)", printed.fin_total, Math.abs(fin.reduce((s, t) => s + t.amount_cents, 0))));
   const cred = -all.reduce((s, t) => s + (t.amount_cents < 0 ? t.amount_cents : 0), 0);
   if ("creditos" in summary) doc.checks.push(makeCheck("total creditos (resumen) = pagos + MONTO A DIFERIR + reembolsos", summary.creditos, cred));
   const posted = postings.reduce((s, p) => s + p._amt, 0);
   if ("msi_monthly" in printed) doc.checks.push(makeCheck("Total de Meses sin Intereses (tabla mensual)", printed.msi_monthly, posted));
   const pos = all.reduce((s, t) => s + (t.amount_cents > 0 ? t.amount_cents : 0), 0);
-  if ("nuevas_transacciones" in summary) doc.checks.push(makeCheck("Nuevas transacciones = cargos positivos (todos los bloques + extranjero)", summary.nuevas_transacciones, pos));
+  if ("nuevas_transacciones" in summary) doc.checks.push(makeCheck("Nuevas transacciones = cargos positivos (todos los bloques + extranjero, sin la sección financiera)", summary.nuevas_transacciones, pos - fin.reduce((a, t) => a + Math.max(t.amount_cents, 0), 0)));
   if ("nuevos_cargos" in summary) doc.checks.push(makeCheck("Total Nuevos Cargos = cargos positivos + mensualidades MSI", summary.nuevos_cargos, pos + posted));
   if ("plan_saldo" in printed) {
     doc.checks.push(makeCheck("Total Plan MSI: saldo pendiente (union de paginas)", printed.plan_saldo, doc.plans.reduce((s, p) => s + p.pending_cents, 0)));

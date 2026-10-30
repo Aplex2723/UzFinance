@@ -59,7 +59,8 @@ export function banamexCreditKey(lines: string[]): { product: string | null; key
 }
 
 export function extractBanamexCredit(pdf: PdfText, document?: string, cardKey?: string): RawDoc {
-  const lines = pdf.pages.flatMap((p) => pageLines(p)).map((l) => l.trim()).filter(Boolean);
+  // Puntos sueltos del pie de página (". .") que pdf.js a veces pega al último renglón de la página: "+ $1,259.00 ..".
+  const lines = pdf.pages.flatMap((p) => pageLines(p)).map((l) => l.trim().replace(/(?:\s+\.+)+$/, "")).filter(Boolean);
   const auto = banamexCreditKey(lines);
   const key = cardKey || auto.key;
   const doc = makeDoc(document || `${key}_stmt`, key, null, null);

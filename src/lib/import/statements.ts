@@ -285,18 +285,22 @@ export async function importStatements(
 
   // --- Contra lo que ya existe: cada fila existente "consume" a lo más un movimiento (compras idénticas legítimas no se pierden) ---
   const existing = await loadExisting(cands);
-  const used = new Set<number>();
+  const used = new Map<number, ImportStats>();
   const toInsert: Candidate[] = [];
   for (const c of [...cands].sort((a, b) => a.date.localeCompare(b.date))) {
     const hit = existing
       .filter((e) => !used.has(e.id) && e.kind === c.kind && e.cents === c.cents && (c.kind === "card_payment" ? dayDiff(e.date, c.date) <= 5 : e.cardId === c.card.id && dayDiff(e.date, c.date) <= 2))
       .sort((a, b) => dayDiff(a.date, c.date) - dayDiff(b.date, c.date))[0];
     if (hit) {
-      used.add(hit.id);
+      used.set(hit.id, c.stat);
       c.stat.existing++;
       if (c.planId !== undefined && c.notes?.startsWith("Compra a")) c.stat.purchasesFromPlans = Math.max(0, c.stat.purchasesFromPlans - 1);
-    } else if (c.kind === "card_payment" && toInsert.some((x) => x.kind === "card_payment" && x.cents === c.cents && dayDiff(x.date, c.date) <= 5)) {
-      // El mismo pago sale en el estado de la tarjeta ("pago en línea") y en el del débito (domiciliación): se guarda una vez.
+    } else if (c.kind === "card_payment" && (
+      toInsert.some((x) => x.stat !== c.stat && x.kind === "card_payment" && x.cents === c.cents && dayDiff(x.date, c.date) <= 5)
+      || existing.some((e) => e.kind === "card_payment" && e.cents === c.cents && dayDiff(e.date, c.date) <= 5 && used.get(e.id) !== undefined && used.get(e.id) !== c.stat)
+    )) {
+      // El mismo pago sale en el estado de la tarjeta ("pago en línea") y en el del débito (domiciliación): se guarda una vez,
+      // tanto si el otro lado va en esta importación como si ya estaba guardado (al reimportar ambos, la fila existente sirve a los dos).
       c.stat.existing++;
     } else toInsert.push(c);
   }

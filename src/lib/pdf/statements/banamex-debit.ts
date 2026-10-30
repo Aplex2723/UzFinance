@@ -103,6 +103,10 @@ export function classifyDebitRow(conceptLines: string[], ownName: string, withdr
     set("transfer_own", "Retiro de ahorro a la vista", "de Ahorro Facil (cuenta propia)");
   } else if (up.startsWith("TRASPASO")) {
     set("transfer_own", "Traspaso", `traspaso banca electronica ${withdrawal ? "(sale)" : "(entra)"}`);
+  } else if (/^PAGO DE SERVICIO \d+ A TB\b/.test(up) && /\b\d{12}(\d{4})\b/.test(text) && withdrawal) {
+    // Pago a una tarjeta de crédito Banamex ("A TB" + número de tarjeta de 16 dígitos): es un pago de tarjeta, no un gasto. El mismo pago
+    // sale como "SU ABONO" en el estado de la tarjeta y la importación lo guarda una sola vez.
+    set("domiciliation_card_payment", `Pago a tarjeta Banamex ···${/\b\d{12}(\d{4})\b/.exec(text)![1]}`);
   } else if (CARD_RE.test(text)) {
     // compra con tarjeta de débito: comercio, ciudad y fechas/ids
     const merch: string[] = [];
@@ -180,7 +184,7 @@ export function extractBanamexDebit(pdf: PdfText, document = "debito_stmt", card
       const top = ln[0].top;
       if (txt.includes("FECHA") && txt.includes("CONCEPTO") && txt.includes("SALDO")) { inTable = true; continue; }
       if (!inTable || top > 740) continue;
-      if (txt.startsWith("Domiciliaci") || txt.startsWith("AHORRO") || txt.includes("Cargo Autom")) { stop = true; break; }
+      if (txt.startsWith("Domiciliaci") || txt.startsWith("AHORRO") || txt.includes("Cargo Autom") || txt.startsWith("Resumen Operaciones")) { stop = true; break; }
       if (txt.startsWith("SALDO ANTERIOR")) {
         const last = ln.at(-1)!.str;
         if (AMT.test(last)) prevBalance = parseMoney(last);

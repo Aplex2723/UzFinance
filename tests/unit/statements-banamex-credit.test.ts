@@ -148,3 +148,15 @@ describe("Banamex crédito: detección y validación por index", () => {
     expect(doc.checks.some((c) => !c.ok && /periodo/.test(c.name))).toBe(true);
   });
 });
+
+describe("Banamex crédito: puntos sueltos del pie de página", () => {
+  it("un '..' pegado al último importe de la página no tumba la extracción", () => {
+    const lines = stmt();
+    const i = lines.findIndex((l) => l.startsWith("11-sep-2026 11-sep-2026 IVA POR INTERESES"));
+    lines[i] = `${lines[i]} ..`;
+    const doc = extractBanamexCredit(linesPdf([lines]));
+    expect(doc.warnings).toEqual([]);
+    expect(doc.transactions).toHaveLength(11);
+    expect(doc.checks.filter((c) => !c.ok)).toEqual([]);
+  });
+});
