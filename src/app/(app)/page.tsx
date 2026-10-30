@@ -112,8 +112,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </Panel>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <Panel title="Flujo: tarjeta → categoría">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Flujo: tarjeta → categoría" className="flex flex-col">
           <SankeyChart data={sankey} />
         </Panel>
         <Panel title="Intensidad de gasto diario">
@@ -121,11 +121,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </Panel>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <GoalsOverviewPanel o={goals} />
         <div className="flex flex-col gap-4">
           <MsiPanel s={msi} />
-          <Panel title="Actividad reciente" action={<Link href="/actividad" className="btn !h-7 !px-2.5 text-[11px]">Ver todo</Link>}>
+          <Panel className="flex-1" title="Actividad reciente" action={<Link href="/actividad" className="btn !h-7 !px-2.5 text-[11px]">Ver todo</Link>}>
             <RecentActivity rows={recent.rows} />
           </Panel>
         </div>

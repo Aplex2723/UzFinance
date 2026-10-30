@@ -1,13 +1,13 @@
 "use client";
 import { sankey, sankeyJustify, sankeyLinkHorizontal, type SankeyLink, type SankeyNode } from "d3-sankey";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatMXN } from "@/lib/money";
 
 type In = { card: string; category: string; color: string; cents: number };
 type N = { id: string; name: string; color: string; side: "card" | "cat" };
 type L = { source: string; target: string; value: number; color: string };
 
-const W = 680, MAX_CATS = 8, ROW = 30, OTHERS = "Otras categorías";
+const MIN_W = 520, MARGIN_L = 185, MARGIN_R = 165, MAX_CATS = 8, ROW = 30, OTHERS = "Otras categorías";
 
 /** Deja las categorías más pesadas y junta el resto en una sola: con 25+ nodos el diagrama es ilegible. */
 function groupSmall(data: In[]): In[] {
@@ -27,33 +27,46 @@ function groupSmall(data: In[]): In[] {
 
 export function SankeyChart({ data }: { data: In[] }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const grouped = useMemo(() => groupSmall(data), [data]);
+  const minHeight = Math.max(260, Math.max(new Set(grouped.map((d) => d.card)).size, new Set(grouped.map((d) => d.category)).size) * ROW);
+  const hasData = data.length > 0;
+
+  // El diagrama se dibuja al tamaño real de su contenedor: así ocupa la misma altura que el panel de al lado.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setBox({ w: Math.round(e.contentRect.width), h: Math.round(e.contentRect.height) }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasData]);
+
   const graph = useMemo(() => {
-    if (!data.length) return null;
+    if (!grouped.length || !box) return null;
     const nodes = new Map<string, N>();
-    const grouped = groupSmall(data);
+    const width = Math.max(MIN_W, box.w), height = Math.max(minHeight, box.h);
     const links: L[] = grouped.map((d) => {
       nodes.set(`c:${d.card}`, { id: `c:${d.card}`, name: d.card, color: "#d4d4d8", side: "card" });
       nodes.set(`k:${d.category}`, { id: `k:${d.category}`, name: d.category, color: d.color, side: "cat" });
       return { source: `c:${d.card}`, target: `k:${d.category}`, value: d.cents / 100, color: d.color };
     });
-    const rows = Math.max(new Set(grouped.map((d) => d.card)).size, new Set(grouped.map((d) => d.category)).size);
-    const height = Math.max(260, rows * ROW);
     const layout = sankey<N, L>()
       .nodeId((n) => n.id)
       .nodeAlign(sankeyJustify)
       .nodeWidth(10)
       .nodePadding(14)
-      .extent([[175, 6], [W - 150, height - 6]]);
-    return { height, ...layout({ nodes: [...nodes.values()].map((n) => ({ ...n })), links: links.map((l) => ({ ...l })) }) };
-  }, [data]);
+      .extent([[MARGIN_L, 6], [width - MARGIN_R, height - 6]]);
+    return { width, height, ...layout({ nodes: [...nodes.values()].map((n) => ({ ...n })), links: links.map((l) => ({ ...l })) }) };
+  }, [grouped, box, minHeight]);
 
-  if (!graph) return <p className="py-10 text-center text-muted">Sin gasto en este mes.</p>;
+  if (!hasData) return <p className="py-10 text-center text-muted">Sin gasto en este mes.</p>;
   const path = sankeyLinkHorizontal<N, L>();
-  const total = graph.links.reduce((a, l) => a + l.value, 0);
+  const total = graph ? graph.links.reduce((a, l) => a + l.value, 0) : 0;
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${graph.height}`} className="min-w-[560px]" role="img" aria-label="Flujo del gasto de tarjeta a categoría">
+    <div ref={ref} className="relative flex-1 overflow-x-auto" style={{ minHeight }}>
+      {graph && <svg width={graph.width} height={graph.height} viewBox={`0 0 ${graph.width} ${graph.height}`} className="absolute left-0 top-0" role="img" aria-label="Flujo del gasto de tarjeta a categoría">
         <defs>
           {graph.links.map((l, i) => {
             const s = l.source as SankeyNode<N, L>, t = l.target as SankeyNode<N, L>;
@@ -91,15 +104,15 @@ export function SankeyChart({ data }: { data: In[] }) {
               y={((n.y0 ?? 0) + (n.y1 ?? 0)) / 2}
               textAnchor={n.side === "card" ? "end" : "start"}
               dominantBaseline="middle"
-              fontSize="10"
+              fontSize="11"
               fill="#d4d4d8"
             >
-              {n.name.length > 23 ? `${n.name.slice(0, 22)}…` : n.name}
+              {n.name.length > 24 ? `${n.name.slice(0, 23)}…` : n.name}
               <tspan fill="#8b8b92" fontSize="9">{` · ${formatMXN((n.value ?? 0) * 100, { compact: true })}`}</tspan>
             </text>
           </g>
         ))}
-      </svg>
+      </svg>}
     </div>
   );
 }
