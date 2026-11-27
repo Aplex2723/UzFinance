@@ -246,6 +246,11 @@ export function buildMsiMessages(s: MsiSummary): InsightMessage[] {
 export const MSI_MIN = 2;
 export const MSI_MAX = 48;
 
+/** Las tarjetas de débito no tienen MSI. No hay un campo "tipo" en la tarjeta: se deduce del diseño o del nombre. Puro: lo usa también el cliente. */
+export const isDebitCard = (card: { art: string | null; name: string }) => card.art === "banamex-debito" || /d[eé]bito/i.test(card.name);
+
+export const validMsiMonths = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= MSI_MIN && (n as number) <= MSI_MAX;
+
 /**
  * Fechas del plan de una compra NUEVA a MSI hecha el día `purchase`, igual que el importador de estados de cuenta: la mensualidad 1 se
  * carga al inicio del periodo en que se hizo la compra, así que el plan nace "al corte que cierra ese periodo" con 1 mensualidad.

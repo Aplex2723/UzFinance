@@ -4,19 +4,28 @@ import { executeTool, type ToolCtx } from "@/lib/chat/tools";
 import { getEnv, parseNamedTokens } from "@/lib/env";
 import { BodyTooLargeError, readLimitedText } from "@/lib/security/body";
 import { mcpFailures as failures, mcpPerIp as perIp, mcpPerToken as perToken } from "@/lib/security/ingest-limiters";
-import { clientIp } from "@/lib/security/ratelimit";
+import { clientIp, RateLimiter } from "@/lib/security/ratelimit";
 import { verifyNamedToken } from "@/lib/security/token";
 import { handleMessage, type RpcResponse } from "./server";
+import { executeWriteTool } from "./write-tools";
 
 /**
  * Transporte HTTP del servidor MCP ("Streamable HTTP" sin estado: cada POST es un mensaje JSON-RPC, o un lote, y se responde con
  * JSON; nunca se abre un flujo SSE). Fuera de Easy Auth (excludedPaths): un cliente de IA no tiene sesión de Entra, así que la
  * autenticación es un token Bearer propio y revocable por cliente (MCP_TOKENS), comparado en tiempo constante. Sin tokens
- * configurados falla cerrado. Es solo lectura: no hay ninguna herramienta que escriba.
+ * configurados falla cerrado. Solo los clientes de MCP_WRITE_CLIENTS pueden registrar gastos (máx. 30 escrituras cada 10 min por cliente);
+ * los demás son de solo lectura.
  */
 
 const MAX_BODY = 64 * 1024;
 const MAX_BATCH = 10;
+/** Tope de escrituras por cliente: un asistente legítimo registra unos cuantos gastos al día; un bucle o un token robado no llena la base. */
+const writesPerClient = new RateLimiter(30, 10 * 60_000);
+
+/** ¿Este cliente (nombre del token) puede escribir? */
+export function canWrite(who: string, raw = getEnv().MCP_WRITE_CLIENTS): boolean {
+  return !!raw && raw.split(",").map((n) => n.trim()).filter(Boolean).includes(who);
+}
 
 const rpc = (body: unknown, status = 200, headers: Record<string, string> = {}) => json(body, status, headers);
 const accepted = () => new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
@@ -74,10 +83,18 @@ async function handle(req: Request): Promise<{ res: Response; who: string; metho
       }
     };
 
+    const callWriteTool = canWrite(who)
+      ? async (name: string, rawArgs: string) => {
+          // list_cards no escribe: no gasta el cupo de escrituras.
+          if (name !== "list_cards" && !writesPerClient.hit(who)) return { ok: false, content: JSON.stringify({ error: "Demasiados registros seguidos; espera unos minutos" }) };
+          return executeWriteTool(name, rawArgs, { now: new Date(), client: who });
+        }
+      : undefined;
+
     // En orden y de uno en uno: las herramientas son consultas cortas y así un lote no abre decenas de conexiones a la base.
     const out: RpcResponse[] = [];
     for (const m of messages) {
-      const r = await handleMessage(m, { callTool });
+      const r = await handleMessage(m, { callTool, callWriteTool });
       if (r) out.push(r);
     }
     if (out.length === 0) return { res: accepted(), who, methods };

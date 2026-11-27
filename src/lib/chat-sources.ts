@@ -9,6 +9,10 @@
  *                                    solo con un Atajo o correo de otra compra parecida; sí cuenta como chat para deshacer,
  *                                    "sin confirmar" y las etiquetas de la app.
  *
+ *   - `mcp` / `mcp-d`                lo mismo, pero registrado por un asistente de IA a través del servidor MCP (`add_expense`, p. ej. Muse):
+ *                                    misma semántica que un bot de chat (se funde con Atajo/correo, cuenta como "sin confirmar", se puede
+ *                                    borrar mientras nadie más lo confirme). No es un `ChatChannel`: el MCP no recibe mensajes ni PDFs.
+ *
  * Los fragmentos SQL se arman SOLO con constantes de este archivo (nunca con texto del usuario).
  */
 export const CHAT_CHANNELS = ["whatsapp", "telegram"] as const;
@@ -19,10 +23,17 @@ export const CHANNEL_NAME: Record<ChatChannel, string> = { whatsapp: "WhatsApp",
 /** Sufijo de una fila de chat con fecha explícita. */
 export const DATED_SUFFIX = "-d";
 
+/** Etiqueta de un gasto registrado por el servidor MCP (asistente de IA). */
+export const MCP_SOURCE = "mcp";
+/** Etiqueta de `sources` para un gasto del MCP; `dated` = trae fecha explícita distinta de hoy (hora artificial 12:00). */
+export const mcpSourceTag = (dated: boolean): string => (dated ? `${MCP_SOURCE}${DATED_SUFFIX}` : MCP_SOURCE);
+/** Fuentes "tecleadas" (bots de chat y MCP): comparten las reglas de fusión, deshacer y "sin confirmar". */
+const TYPED_SOURCES: readonly string[] = [...CHAT_CHANNELS, MCP_SOURCE];
+
 /** Etiquetas fusionables (hora real del mensaje). */
-export const MERGEABLE_CHAT_SOURCES: readonly string[] = CHAT_CHANNELS;
+export const MERGEABLE_CHAT_SOURCES: readonly string[] = TYPED_SOURCES;
 /** Etiquetas de fila con fecha explícita (no fusionables solas). */
-export const DATED_CHAT_SOURCES: readonly string[] = CHAT_CHANNELS.map((c) => `${c}${DATED_SUFFIX}`);
+export const DATED_CHAT_SOURCES: readonly string[] = TYPED_SOURCES.map((c) => `${c}${DATED_SUFFIX}`);
 /** Todas las etiquetas de chat. */
 export const CHAT_SOURCES: readonly string[] = [...MERGEABLE_CHAT_SOURCES, ...DATED_CHAT_SOURCES];
 
@@ -45,6 +56,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   statement: "estado de cuenta",
   receipt: "comprobante PDF",
   manual: "la app",
+  [MCP_SOURCE]: "tu asistente (MCP)",
+  [`${MCP_SOURCE}${DATED_SUFFIX}`]: "tu asistente (MCP)",
   ...Object.fromEntries(CHAT_CHANNELS.flatMap((c) => [[c, CHANNEL_NAME[c]], [`${c}${DATED_SUFFIX}`, CHANNEL_NAME[c]]])),
 };
 
@@ -62,6 +75,8 @@ export const SOURCE_UI_LABELS: Record<string, string> = {
   statement: "Estado de cuenta",
   receipt: "Comprobante PDF",
   manual: "Manual",
+  [MCP_SOURCE]: "Asistente (MCP)",
+  [`${MCP_SOURCE}${DATED_SUFFIX}`]: "Asistente (MCP, fecha indicada)",
   ...Object.fromEntries(CHAT_CHANNELS.flatMap((c) => [[c, CHANNEL_NAME[c]], [`${c}${DATED_SUFFIX}`, `${CHANNEL_NAME[c]} (fecha indicada)`]])),
 };
 

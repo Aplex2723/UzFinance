@@ -2,6 +2,7 @@ import { z } from "zod";
 import { parseAmountToCents } from "@/lib/money";
 import { CARD_ART_IDS } from "@/lib/card-art";
 import { MONTH_RE } from "@/lib/time";
+import { MSI_MAX, MSI_MIN } from "@/lib/msi";
 import { isRealDate, MAX_CARDS, parseFlag, parseId, parsePesos, PERIOD_PRESETS, rangeError, SORT_IDS, SOURCE_IDS } from "@/lib/tx-filters";
 
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/, "color hex #RRGGBB");
@@ -54,8 +55,14 @@ export const transactionSchema = z
     card_id: z.number().int().positive(),
     category_id: z.number().int().positive().nullable().optional().transform((v) => v ?? null),
     notes: optText(500),
+    /** Compra a meses sin intereses: número de mensualidades (el monto es el TOTAL). Solo al crear. */
+    msi_months: z.number().int().min(MSI_MIN).max(MSI_MAX).nullish(),
+    /** La persona confirmó que NO es la compra parecida que ya estaba registrada. */
+    allow_duplicate: z.boolean().optional(),
   })
   .strict();
+
+export const msiConvertSchema = z.object({ months: z.number().int().min(MSI_MIN).max(MSI_MAX) }).strict();
 
 export const idParam = z.coerce.number().int().positive();
 

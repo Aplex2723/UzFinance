@@ -77,6 +77,14 @@ const schema = z.object({
     .string()
     .optional()
     .refine((v) => !v || parseNamedTokens(v) !== null, "MCP_TOKENS: formato nombre=token (token ≥ 32 caracteres)"),
+  /**
+   * Clientes MCP (nombres de MCP_TOKENS, separados por coma) que además pueden REGISTRAR gastos (add_expense / delete_expense), p. ej.
+   * "muse". Los demás siguen siendo de solo lectura. Vacío = nadie escribe.
+   */
+  MCP_WRITE_CLIENTS: z
+    .string()
+    .optional()
+    .refine((v) => !v || v.split(",").every((n) => /^[a-z0-9_-]{1,30}$/.test(n.trim())), "MCP_WRITE_CLIENTS: nombres de MCP_TOKENS separados por coma"),
   /** rules = solo reglas; jev = reglas + historial + Jev (necesita OPENROUTER_API_KEY; sin ella cae a reglas). */
   CATEGORIZER: z.enum(["rules", "jev"]).default("rules"),
   OPENROUTER_API_KEY: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(20).optional()),

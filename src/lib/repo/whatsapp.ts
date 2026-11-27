@@ -149,16 +149,16 @@ export async function dedupeHashExists(hash: string): Promise<boolean> {
   return (await query("SELECT TOP 1 1 AS x FROM dbo.transactions WHERE dedupe_hash=@h", { h: t.char(hash) })).length > 0;
 }
 
-export type SimilarExpense = { id: number; merchant: string; amountCents: number; occurredAt: Date; sources: string; dedupeHash: string };
+export type SimilarExpense = { id: number; merchant: string; amountCents: number; occurredAt: Date; sources: string; dedupeHash: string; planId: number | null };
 
 /** Gastos de la MISMA tarjeta y monto exacto en ±1 día (fecha local), de cualquier fuente: defensa contra registrar dos veces lo que el Atajo o el correo ya capturaron. */
 export async function findSimilarExpenses(cardId: number, amountCents: number, localYmd: string, at: Date): Promise<SimilarExpense[]> {
-  const r = await query<{ id: number; merchant_raw: string; cents: number; occurred_at: Date; sources: string; dedupe_hash: string }>(
-    `SELECT TOP 5 id, merchant_raw, CAST(amount_cents AS float) AS cents, occurred_at, sources, dedupe_hash
+  const r = await query<{ id: number; merchant_raw: string; cents: number; occurred_at: Date; sources: string; dedupe_hash: string; plan_id: number | null }>(
+    `SELECT TOP 5 id, merchant_raw, CAST(amount_cents AS float) AS cents, occurred_at, sources, dedupe_hash, plan_id
      FROM dbo.transactions
      WHERE card_id=@c AND amount_cents=@a AND kind='expense' AND occurred_date BETWEEN DATEADD(day, -1, @d) AND DATEADD(day, 1, @d)
      ORDER BY ABS(DATEDIFF(minute, occurred_at, @at)), id`,
     { c: t.int(cardId), a: t.big(amountCents), d: t.date(localYmd), at: t.dt(at) },
   );
-  return r.map((x) => ({ id: Number(x.id), merchant: x.merchant_raw, amountCents: Number(x.cents), occurredAt: x.occurred_at, sources: x.sources, dedupeHash: x.dedupe_hash }));
+  return r.map((x) => ({ id: Number(x.id), merchant: x.merchant_raw, amountCents: Number(x.cents), occurredAt: x.occurred_at, sources: x.sources, dedupeHash: x.dedupe_hash, planId: x.plan_id === null ? null : Number(x.plan_id) }));
 }

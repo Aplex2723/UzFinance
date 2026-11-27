@@ -1,3 +1,4 @@
+import { AddMsiButton } from "@/components/insights/AddMsiButton";
 import { MsiStartedChart } from "@/components/charts/MsiStartedChart";
 import { MsiTimelineChart } from "@/components/charts/MsiTimelineChart";
 import { InsightList } from "@/components/insights/InsightList";
@@ -28,10 +29,10 @@ export default async function Page() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageTitle title="Meses sin intereses" subtitle="Qué debes a meses, cuánto se te cobra cada mes y cuándo termina cada plan." />
+      <PageTitle title="Meses sin intereses" subtitle="Qué debes a meses, cuánto se te cobra cada mes y cuándo termina cada plan." action={<AddMsiButton className="btn btn-primary" label="Agregar compra a MSI" />} />
 
       {s.plans.length === 0 ? (
-        <Panel><Empty>Aún no hay planes a meses. Se llenan al importar tus estados de cuenta (sección “compras y cargos diferidos a meses”).</Empty></Panel>
+        <Panel><Empty>Aún no hay planes a meses. Se llenan al importar tus estados de cuenta (sección “compras y cargos diferidos a meses”) o con “Agregar compra a MSI”.</Empty></Panel>
       ) : (
         <>
           <section aria-label="Cifras clave de MSI" className="grid grid-cols-2 gap-3 lg:grid-cols-4">

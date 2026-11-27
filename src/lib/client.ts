@@ -1,6 +1,6 @@
 "use client";
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; status: number };
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; status: number; /** Cuerpo JSON de la respuesta de error (p. ej. el movimiento parecido de un 409). */ body?: Record<string, unknown> };
 
 export async function apiFetch<T = unknown>(path: string, method: string, body?: unknown, contentType = "application/json"): Promise<ApiResult<T>> {
   try {
@@ -11,7 +11,7 @@ export async function apiFetch<T = unknown>(path: string, method: string, body?:
       credentials: "same-origin",
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, status: res.status, error: (data as { error?: string }).error ?? `Error ${res.status}` };
+    if (!res.ok) return { ok: false, status: res.status, error: (data as { error?: string }).error ?? `Error ${res.status}`, body: data as Record<string, unknown> };
     return { ok: true, data: data as T };
   } catch {
     return { ok: false, status: 0, error: "Sin conexión con el servidor" };

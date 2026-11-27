@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHAT_SOURCES, chatSourceTag, channelOf, DATED_CHAT_SOURCES, DOC_ORIGIN, isChatSource, isUndoableSources, MERGEABLE_CHAT_SOURCES, originLabel, SOURCE_LABELS, SOURCE_UI_LABELS, sourcesLabel, SQL } from "@/lib/chat-sources";
+import { CHAT_SOURCES, chatSourceTag, channelOf, DATED_CHAT_SOURCES, DOC_ORIGIN, isChatSource, isUndoableSources, mcpSourceTag, MERGEABLE_CHAT_SOURCES, originLabel, SOURCE_LABELS, SOURCE_UI_LABELS, sourcesLabel, SQL } from "@/lib/chat-sources";
 
 describe("fuentes de chat (módulo central)", () => {
   it("etiquetas por canal, con y sin fecha explícita", () => {
@@ -7,9 +7,12 @@ describe("fuentes de chat (módulo central)", () => {
     expect(chatSourceTag("telegram", false)).toBe("telegram");
     expect(chatSourceTag("whatsapp", true)).toBe("whatsapp-d");
     expect(chatSourceTag("telegram", true)).toBe("telegram-d");
-    expect(MERGEABLE_CHAT_SOURCES).toEqual(["whatsapp", "telegram"]);
-    expect(DATED_CHAT_SOURCES).toEqual(["whatsapp-d", "telegram-d"]);
-    expect(CHAT_SOURCES).toEqual(["whatsapp", "telegram", "whatsapp-d", "telegram-d"]);
+    // El MCP (asistentes como Muse) comparte las reglas de los bots: se funde con Atajo/correo y cuenta como "sin confirmar".
+    expect(MERGEABLE_CHAT_SOURCES).toEqual(["whatsapp", "telegram", "mcp"]);
+    expect(DATED_CHAT_SOURCES).toEqual(["whatsapp-d", "telegram-d", "mcp-d"]);
+    expect(CHAT_SOURCES).toEqual(["whatsapp", "telegram", "mcp", "whatsapp-d", "telegram-d", "mcp-d"]);
+    expect(mcpSourceTag(false)).toBe("mcp");
+    expect(mcpSourceTag(true)).toBe("mcp-d");
     // caben en sources VARCHAR(40) aun con Atajo y correo
     expect("telegram-d,shortcut,email".length).toBeLessThanOrEqual(40);
   });
@@ -28,10 +31,10 @@ describe("fuentes de chat (módulo central)", () => {
   });
 
   it("fragmentos SQL: fusionables sin las de fecha; sin confirmar con todas las de chat", () => {
-    expect(SQL.mergeableChat).toBe("'whatsapp', 'telegram'");
-    expect(SQL.emailMergeable).toBe("'shortcut', 'whatsapp', 'telegram', 'whatsapp,shortcut', 'telegram,shortcut'");
+    expect(SQL.mergeableChat).toBe("'whatsapp', 'telegram', 'mcp'");
+    expect(SQL.emailMergeable).toBe("'shortcut', 'whatsapp', 'telegram', 'mcp', 'whatsapp,shortcut', 'telegram,shortcut', 'mcp,shortcut'");
     expect(SQL.emailMergeable).not.toContain("-d");
-    expect(SQL.undoable).toBe("'whatsapp', 'telegram', 'whatsapp-d', 'telegram-d', 'receipt'");
+    expect(SQL.undoable).toBe("'whatsapp', 'telegram', 'mcp', 'whatsapp-d', 'telegram-d', 'mcp-d', 'receipt'");
     const u = SQL.unconfirmed("x");
     for (const t of ["'shortcut'", "'whatsapp'", "'telegram'", "'whatsapp-d'", "'telegram-d'", "'whatsapp,shortcut'", "'telegram,shortcut'"]) expect(u).toContain(t);
     expect(u).toContain("x.email_message_id IS NULL");

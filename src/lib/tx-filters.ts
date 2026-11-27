@@ -147,7 +147,7 @@ export function periodLabel(p: PeriodFields, today: string): string | null {
 
 /* ---------------------------------------------------------------- fuentes --- */
 
-export const SOURCE_IDS = ["shortcut", "email", "statement", "receipt", "manual", "whatsapp", "telegram"] as const;
+export const SOURCE_IDS = ["shortcut", "email", "statement", "receipt", "manual", "whatsapp", "telegram", "mcp"] as const;
 export type SourceId = (typeof SOURCE_IDS)[number];
 
 /**
@@ -164,6 +164,7 @@ export const SOURCE_TOKENS: Record<SourceId, readonly string[]> = {
   manual: ["manual"],
   whatsapp: ["whatsapp", `whatsapp${DATED_SUFFIX}`],
   telegram: ["telegram", `telegram${DATED_SUFFIX}`],
+  mcp: ["mcp", `mcp${DATED_SUFFIX}`],
 };
 
 export const SOURCE_FILTER_LABEL: Record<SourceId, string> = {
@@ -174,6 +175,7 @@ export const SOURCE_FILTER_LABEL: Record<SourceId, string> = {
   manual: SOURCE_UI_LABELS.manual,
   whatsapp: SOURCE_UI_LABELS.whatsapp,
   telegram: SOURCE_UI_LABELS.telegram,
+  mcp: SOURCE_UI_LABELS.mcp,
 };
 
 export const SOURCE_FILTER_HINT: Record<SourceId, string> = {
@@ -184,6 +186,7 @@ export const SOURCE_FILTER_HINT: Record<SourceId, string> = {
   manual: "Lo capturaste a mano en la app",
   whatsapp: "Lo tecleaste por WhatsApp",
   telegram: "Lo tecleaste por Telegram",
+  mcp: "Lo registró tu asistente de IA por el servidor MCP (p. ej. Muse)",
 };
 
 export const isSourceId = (s: string): s is SourceId => (SOURCE_IDS as readonly string[]).includes(s);

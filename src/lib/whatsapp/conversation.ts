@@ -2,9 +2,8 @@ import { getCategorizer } from "@/lib/categorizer";
 import { CHANNEL_NAME, chatSourceTag, type ChatChannel } from "@/lib/chat-sources";
 import { normalizeMerchant } from "@/lib/merchant";
 import { scheduleTransactionAlerts } from "@/lib/alerts/schedule";
-import { newPlanTiming } from "@/lib/msi";
 import { listCategories } from "@/lib/repo/categories";
-import { cardCutAnchor, linkTransactionPlan, upsertPlan } from "@/lib/repo/plans";
+import { attachMsiPlan, isDebitCard, monthlyOf } from "@/lib/repo/manual-msi";
 import { dedupeHash, ingestTransaction } from "@/lib/repo/transactions";
 import { dedupeHashExists, findSimilarExpenses, linkMessageTx, savePending, takePending, type PendingStep } from "@/lib/repo/whatsapp";
 import { localDate } from "@/lib/time";
@@ -88,8 +87,6 @@ function revive(step: PendingStep, payload: string): Pending | null {
 
 const summaryOf = (d: Draft): R.Summary => ({ merchant: d.merchant, cents: d.amountCents, msi: d.installments ?? null });
 
-/** Tarjetas de débito no tienen MSI. No hay un campo "tipo" en la tarjeta: se deduce del diseño o del nombre. */
-const isDebit = (card: Card) => card.art === "banamex-debito" || /d[eé]bito/i.test(card.name);
 const cardById = (c: Ctx, id: number | null) => c.cards.find((x) => x.id === id) ?? null;
 
 function questionFor(c: Ctx, p: Pending): string {
@@ -138,7 +135,7 @@ async function advance(c: Ctx, draft: Draft, choices: number[], hint?: string | 
   }
   const card = cardById(c, d.cardId)!;
   const at = new Date(d.occurredAt);
-  if (d.installments && isDebit(card)) return { reply: R.msiNotForDebit(card.name), status: "done" };
+  if (d.installments && isDebitCard(card)) return { reply: R.msiNotForDebit(card.name), status: "done" };
   if (d.amountCents >= CONFIRM_CENTS && !d.confirmed) return ask(c, { need: "confirm", draft: d, choices: [], tries: 0 });
 
   if (!d.dupOk) {
@@ -220,21 +217,12 @@ async function save(c: Ctx, d: Draft, card: Card, seq?: number): Promise<Outcome
  */
 async function createMsiPlan(d: Draft, card: Card, at: Date, txId: number, categoryId: number | null): Promise<R.MsiInfo> {
   const n = d.installments!;
-  const total = d.amountCents!;
-  const monthly = Math.round(total / n);
-  const purchase = localDate(at);
   try {
-    const anchor = await cardCutAnchor(card.id);
-    const timing = newPlanTiming(purchase, anchor);
-    const plan = await upsertPlan({
-      cardId: card.id, categoryId, merchant: d.merchant!, kind: "purchase", withInterest: false, ratePct: 0,
-      originalCents: total, monthlyCents: monthly, pendingCents: total - monthly, nTotal: n, nCurrent: 1, asOf: timing.asOf, startedOn: purchase, source: "manual",
-    });
-    await linkTransactionPlan(txId, plan.id);
-    return { n, monthlyCents: monthly, ok: true, guessed: timing.guessed };
+    const m = await attachMsiPlan({ txId, cardId: card.id, categoryId, merchant: d.merchant!, totalCents: d.amountCents!, months: n, purchaseYmd: localDate(at) });
+    return { n, monthlyCents: m.monthlyCents, ok: true, guessed: m.guessed };
   } catch (e) {
     console.error("[chat] no se pudo crear el plan MSI:", ((e as Error)?.message ?? "").slice(0, 120));
-    return { n, monthlyCents: monthly, ok: false, guessed: false };
+    return { n, monthlyCents: monthlyOf(d.amountCents!, n), ok: false, guessed: false };
   }
 }
 

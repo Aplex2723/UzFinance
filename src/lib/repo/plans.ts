@@ -24,6 +24,12 @@ export type PlanInput = {
   startedEstimated?: boolean;
   /** 'manual' = capturada a mano (p. ej. por el bot); el primer estado de cuenta que traiga la misma compra la adopta. */
   source?: "statement" | "manual";
+  /**
+   * Solo planes manuales: lo que hace única su clave (p. ej. `tx:<id del gasto>`). Sin esto, la misma compra repetida meses después
+   * (misma tarjeta, comercio, monto y meses) pisaría el plan anterior. El estado de cuenta adopta el plan igual (por tarjeta, monto,
+   * meses y fecha) y le pone su propia clave.
+   */
+  manualKey?: string;
 };
 
 /**
@@ -44,7 +50,7 @@ export async function upsertPlan(p: PlanInput): Promise<{ id: number; status: "c
   if (!validDate(p.asOf) || !validDate(p.startedOn)) throw new RangeError("fecha inválida");
   if (!(p.nTotal >= 1 && p.nCurrent >= 0 && p.nCurrent <= p.nTotal)) throw new RangeError("mensualidades inválidas");
   if (!(p.originalCents > 0 && p.monthlyCents >= 0 && p.pendingCents >= 0)) throw new RangeError("montos inválidos");
-  const key = planKey(p);
+  const key = p.source === "manual" && p.manualKey ? createHash("sha256").update(`${planKey(p)}|manual|${p.manualKey}`).digest("hex") : planKey(p);
   const existing = await query<{ id: number; as_of: Date }>("SELECT id, as_of FROM dbo.installment_plans WHERE dedupe_key=@k", { k: t.char(key) });
   if (!existing[0] && (p.source ?? "statement") === "statement") {
     // ¿Es la compra que ya se capturó a mano (bot)? Mismo plan aunque el comercio se llame distinto en el estado de cuenta: misma tarjeta,

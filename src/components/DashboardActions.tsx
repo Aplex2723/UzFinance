@@ -1,5 +1,5 @@
 "use client";
-import { Bell, FileUp, Plus, Sparkles, Upload } from "lucide-react";
+import { Bell, CalendarClock, FileUp, Plus, Sparkles, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -22,6 +22,7 @@ export function DashboardActions() {
   return (
     <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&>*]:shrink-0">
       <button className="btn btn-primary" onClick={() => emit(EVENTS.addExpense)}><Plus size={14} aria-hidden /> Agregar gasto</button>
+      <button className="btn" onClick={() => emit(EVENTS.addExpense, { msi: true })} data-testid="quick-add-msi"><CalendarClock size={13} aria-hidden /> Compra a MSI</button>
       <button className="btn" onClick={() => emit(EVENTS.importCsv)}><Upload size={13} aria-hidden /> Importar CSV</button>
       <button className="btn" onClick={categorize} disabled={busy}><Sparkles size={13} aria-hidden /> {busy ? "Categorizando…" : "Categorizar"}</button>
       <Link href="/documentos" className="btn" data-testid="quick-upload-pdf"><FileUp size={13} aria-hidden /> Subir PDF</Link>

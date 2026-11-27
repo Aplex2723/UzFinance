@@ -1,9 +1,12 @@
 import { TOOL_SPECS, toolLabel, type ToolOutcome } from "@/lib/chat/tools";
+import { MCP_WRITE_TOOLS, WRITE_TOOL_NAMES } from "./write-tools";
 
 /**
- * Servidor MCP (Model Context Protocol) de UzFinance: JSON-RPC 2.0 sin estado, solo lectura. Expone las MISMAS herramientas de
- * UzChat (consultas de gasto, categorías, comercios, MSI, metas…), así que lo que un cliente externo puede ver es exactamente lo que
- * ya decidió el dueño que ve UzChat. Aquí vive el protocolo; la autenticación y los límites están en ./http.ts.
+ * Servidor MCP (Model Context Protocol) de UzFinance: JSON-RPC 2.0 sin estado. Expone las MISMAS herramientas de lectura de UzChat
+ * (consultas de gasto, categorías, comercios, MSI, metas…), así que lo que un cliente externo puede ver es exactamente lo que ya decidió
+ * el dueño que ve UzChat. Los clientes autorizados a escribir (MCP_WRITE_CLIENTS, p. ej. el bot Muse) ven además las herramientas de
+ * ./write-tools.ts (registrar y deshacer gastos, como el bot de Telegram). Aquí vive el protocolo; la autenticación y los límites
+ * están en ./http.ts.
  */
 
 export const SUPPORTED_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
@@ -13,6 +16,13 @@ export const SERVER_INSTRUCTIONS =
   "YYYY-MM-DD; field names are in Spanish. Call the tools to get facts and quote them as returned; use `calculate` for any arithmetic " +
   "instead of computing by hand. Periods default to the current month up to today. Tools never return notes, authorization codes or " +
   "account numbers, and nothing can be modified through this server.";
+
+export const SERVER_INSTRUCTIONS_WRITER =
+  "UzFinance: personal finance data of a single owner in Mexico. All amounts are in Mexican pesos (MXN) and all dates are YYYY-MM-DD " +
+  "(Mexico City time); field names are in Spanish. Read tools answer questions about spending; quote their results as returned and use " +
+  "`calculate` for arithmetic. To record an expense the person tells you, call `add_expense` with the TOTAL amount, the merchant and the " +
+  "card (use `list_cards` if unsure; ask if anything is missing). If it answers with `necesita`, ask the person and only then call again " +
+  "with that flag set to true. Use `delete_expense` with the returned id to undo. Tools never return notes, authorization codes or account numbers.";
 
 export type RpcId = string | number | null;
 export type RpcResponse = { jsonrpc: "2.0"; id: RpcId; result: unknown } | { jsonrpc: "2.0"; id: RpcId; error: { code: number; message: string } };
@@ -32,6 +42,8 @@ const KNOWN = new Set(MCP_TOOLS.map((t) => t.name));
 export type McpDeps = {
   /** Ejecuta una herramienta con el contexto (categorías, tarjetas, fecha) ya cargado. Nunca lanza. */
   callTool: (name: string, rawArgs: string) => Promise<ToolOutcome>;
+  /** Solo para clientes de MCP_WRITE_CLIENTS: ejecuta una herramienta de escritura. Sin esto, el cliente no las ve ni las puede llamar. */
+  callWriteTool?: (name: string, rawArgs: string) => Promise<ToolOutcome>;
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -60,18 +72,19 @@ export async function handleMessage(msg: unknown, deps: McpDeps): Promise<RpcRes
         protocolVersion: version,
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: "uzfinance", title: "UzFinance", version: "1.0.0" },
-        instructions: SERVER_INSTRUCTIONS,
+        instructions: deps.callWriteTool ? SERVER_INSTRUCTIONS_WRITER : SERVER_INSTRUCTIONS,
       });
     }
     case "ping":
       return rpcResult(rid, {});
     case "tools/list":
-      return rpcResult(rid, { tools: MCP_TOOLS });
+      return rpcResult(rid, { tools: deps.callWriteTool ? [...MCP_TOOLS, ...MCP_WRITE_TOOLS] : MCP_TOOLS });
     case "tools/call": {
       const name = params.name;
-      if (typeof name !== "string" || !KNOWN.has(name)) return rpcError(rid, -32602, `Herramienta desconocida: ${typeof name === "string" ? name.slice(0, 60) : "(sin nombre)"}`);
+      const write = deps.callWriteTool && typeof name === "string" && WRITE_TOOL_NAMES.has(name) ? deps.callWriteTool : null;
+      if (typeof name !== "string" || (!write && !KNOWN.has(name))) return rpcError(rid, -32602, `Herramienta desconocida: ${typeof name === "string" ? name.slice(0, 60) : "(sin nombre)"}`);
       if (params.arguments !== undefined && !isObject(params.arguments)) return rpcError(rid, -32602, "'arguments' debe ser un objeto");
-      const out = await deps.callTool(name, JSON.stringify(params.arguments ?? {}));
+      const out = await (write ?? deps.callTool)(name, JSON.stringify(params.arguments ?? {}));
       // Un fallo de la herramienta NO es un error del protocolo: va como resultado con isError para que el modelo lo lea y corrija.
       return rpcResult(rid, { content: [{ type: "text", text: out.content }], isError: !out.ok });
     }
