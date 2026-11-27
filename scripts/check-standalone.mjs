@@ -48,13 +48,15 @@ if (missing.length) {
 // Prueba real: arranca el worker español y lee un texto dibujado.
 const { createWorker } = req(dir);
 const canvasReq = createRequire(path.join(root, "package.json"));
-const { createCanvas } = canvasReq("@napi-rs/canvas");
+const { createCanvas, GlobalFonts } = canvasReq("@napi-rs/canvas");
+// Fuente empaquetada (no la del sistema): la imagen del runner cambia de fuentes y con "sans-serif" el OCR llegó a leer "72750".
+GlobalFonts.registerFromPath(path.join(root, "node_modules", "@fontsource-variable", "inter", "files", "inter-latin-wght-normal.woff2"), "UzCheck");
 const c = createCanvas(600, 120);
 const g = c.getContext("2d");
 g.fillStyle = "#fff";
 g.fillRect(0, 0, 600, 120);
 g.fillStyle = "#000";
-g.font = "48px sans-serif";
+g.font = "48px UzCheck, sans-serif";
 g.fillText("Monto 750.00", 20, 75);
 const langPath = path.join(root, "node_modules", "@tesseract.js-data", "spa", "4.0.0_best_int");
 const worker = await createWorker("spa", 1, { langPath, gzip: true, cacheMethod: "none" });
