@@ -28,8 +28,11 @@ jobs:
           node-version: 24
           cache: npm
 
+      # Proyecto personal: en el push a main (despliegue) solo corren lint, typecheck, build y la verificación del OCR. Las pruebas
+      # unitarias y de integración corren en los pull requests o en local (`npm test`).
       # SQL Server efímero con password aleatorio (nada de secretos en el repo).
       - name: Start SQL Server
+        if: github.event_name == 'pull_request'
         run: |
           PW="Uz$(openssl rand -hex 12)!Aa1"
           echo "::add-mask::$PW"
@@ -46,8 +49,10 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - name: Unit tests
+        if: github.event_name == 'pull_request'
         run: npm run test:unit
       - name: Integration tests (API + SQL Server)
+        if: github.event_name == 'pull_request'
         run: npm run test:integration
       - run: npm run build
       - name: Verificar que el paquete trae el OCR
